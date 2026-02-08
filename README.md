@@ -72,6 +72,22 @@ pip install -e ".[ldap]"
 
 Then set `AUTH_MODE=ldap` and the LDAP environment variables below.
 
+### Docker
+
+Sample files are included — rename and run:
+
+```bash
+cp Dockerfile.sample Dockerfile
+cp docker-compose.yml.sample docker-compose.yml
+
+# Edit docker-compose.yml to set SECRET_KEY and any LDAP vars, then:
+docker compose up -d
+```
+
+The container stores encryption keys and databases in a named volume (`db-monitor-data`) mounted at `/app/data`, so data survives container restarts.
+
+To enable LDAP auth, uncomment the LDAP environment variables in `docker-compose.yml` and set `AUTH_MODE: "ldap"`. An optional LLDAP service is included (commented out) if you need a lightweight LDAP server.
+
 ---
 
 ## Configuration
@@ -180,6 +196,8 @@ Each connection form also has an **Extra JSON** field for advanced driver config
 db-monitor/
 ├── main.py                    # Entry point (17 lines)
 ├── pyproject.toml             # Dependencies & metadata
+├── Dockerfile.sample          # Docker build template
+├── docker-compose.yml.sample  # Compose deployment template
 ├── README.md
 ├── backend/
 │   ├── __init__.py            # App factory (create_app)

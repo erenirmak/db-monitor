@@ -1,0 +1,41 @@
+# ─────────────────────────────────────────────────────────
+# Database Monitor — Dockerfile
+# Rename to "Dockerfile" before building.
+# ─────────────────────────────────────────────────────────
+FROM python:3.11-slim AS base
+
+# OS-level deps for psycopg2-binary, pymysql, etc.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python deps first (layer cache)
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir .
+
+# Optional: uncomment to enable LDAP authentication
+# RUN pip install --no-cache-dir ".[ldap]"
+
+# Copy application code
+COPY main.py ./
+COPY backend/ backend/
+COPY templates/ templates/
+COPY static/ static/
+
+# Persistent volume for data/ (encryption key, DBs)
+VOLUME /app/data
+
+# Environment defaults — override at runtime
+ENV SECRET_KEY="change-me-in-production" \
+    DB_MONITOR_DATA_DIR="/app/data" \
+    AUTH_MODE="local" \
+    SESSION_LIFETIME="604800"
+
+EXPOSE 5000
+
+# Run with eventlet for production Socket.IO
+# Install eventlet: add "eventlet>=0.36.0" to pyproject.toml deps
+# or fall back to threading (default)
+CMD ["python", "main.py"]

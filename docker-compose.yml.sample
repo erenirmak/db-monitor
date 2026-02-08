@@ -1,0 +1,51 @@
+# ─────────────────────────────────────────────────────────
+# Database Monitor — Docker Compose
+# Rename to "docker-compose.yml" before running.
+#
+#   docker compose up -d
+#   docker compose logs -f db-monitor
+# ─────────────────────────────────────────────────────────
+
+services:
+  db-monitor:
+    build: .
+    container_name: db-monitor
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - db-monitor-data:/app/data
+    environment:
+      SECRET_KEY: "change-me-in-production"       # fixed key so sessions survive restarts
+      DB_MONITOR_DATA_DIR: "/app/data"
+      AUTH_MODE: "local"                           # "local" or "ldap"
+      SESSION_LIFETIME: "604800"                   # 7 days in seconds
+
+      # ── LDAP settings (only when AUTH_MODE=ldap) ──
+      # LDAP_URL: "ldap://lldap:3890"
+      # LDAP_BASE_DN: "dc=example,dc=com"
+      # LDAP_USER_DN_TEMPLATE: "uid={username},ou=people,dc=example,dc=com"
+      # LDAP_BIND_DN: "uid=admin,ou=people,dc=example,dc=com"
+      # LDAP_BIND_PASSWORD: "admin-password"
+      # LDAP_USER_FILTER: "(&(objectClass=person)(uid={username}))"
+      # LDAP_REQUIRE_GROUP: "cn=db-monitor-users,ou=groups,dc=example,dc=com"
+
+  # ── Optional: LLDAP container for auth ──
+  # Uncomment below to run a lightweight LDAP server alongside db-monitor.
+  #
+  # lldap:
+  #   image: lldap/lldap:stable
+  #   container_name: lldap
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3890:3890"   # LDAP
+  #     - "17170:17170" # Web UI
+  #   volumes:
+  #     - lldap-data:/data
+  #   environment:
+  #     LLDAP_LDAP_BASE_DN: "dc=example,dc=com"
+  #     LLDAP_LDAP_USER_PASS: "admin-password"
+
+volumes:
+  db-monitor-data:
+  # lldap-data:

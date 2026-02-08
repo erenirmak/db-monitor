@@ -186,36 +186,36 @@ function initializeEventHandlers() {
 function renderDynamicFields(databaseType) {
     const container = document.getElementById('dynamicFieldsContainer');
     const config = DATABASE_CONFIGS[databaseType];
-    
+
     if (!config) {
         container.innerHTML = '';
         return;
     }
 
     let html = '<div class="form-group-section"><div class="form-row full">';
-    
+
     config.fields.forEach((field, index) => {
         const isRequired = field.required ? ' required' : '';
         const requiredLabel = field.required ? '<span class="text-danger">*</span>' : '';
         const helpText = field.help ? `<small class="form-text text-muted">${field.help}</small>` : '';
-        
+
         html += `
             <div class="mb-3">
                 <label for="field_${field.name}" class="form-label">${field.label} ${requiredLabel}</label>
-                <input type="${field.type}" 
-                       class="form-control" 
-                       id="field_${field.name}" 
-                       placeholder="${field.placeholder || ''}" 
+                <input type="${field.type}"
+                       class="form-control"
+                       id="field_${field.name}"
+                       placeholder="${field.placeholder || ''}"
                        value="${field.default || ''}"
                        ${isRequired}>
                 ${helpText}
             </div>
         `;
     });
-    
+
     html += '</div></div>';
     container.innerHTML = html;
-    
+
     // Save current database type fields
     currentConnectionForm.fields = config.fields;
 }
@@ -256,14 +256,14 @@ function validateExtraJson() {
 // Test Connection
 async function testConnection() {
     const connectionType = document.getElementById('databaseType').value;
-    
+
     if (!connectionType) {
         showConnectionMessage('Please select a database type', 'error');
         return;
     }
 
     if (!validateExtraJson()) return;
-    
+
     const connectionData = {
         type: connectionType,
         fields: {},
@@ -282,7 +282,7 @@ async function testConnection() {
     });
 
     showConnectionMessage('Testing connection...', 'info');
-    
+
     try {
         const response = await fetch('/api/test-connection', {
             method: 'POST',
@@ -293,7 +293,7 @@ async function testConnection() {
         });
 
         const result = await response.json();
-        
+
         if (result.success) {
             showConnectionMessage('✓ Connection successful!', 'success');
         } else {
@@ -332,7 +332,7 @@ async function saveConnection() {
     // Collect form data
     const config = DATABASE_CONFIGS[connectionType];
     let isValid = true;
-    
+
     config.fields.forEach(field => {
         const value = document.getElementById(`field_${field.name}`).value;
         if (field.required && !value) {
@@ -386,7 +386,7 @@ function showConnectionMessage(message, type) {
 function filterDatabases(searchTerm) {
     const databaseList = document.getElementById('databaseList');
     const items = databaseList.querySelectorAll('.database-item');
-    
+
     items.forEach(item => {
         const name = item.textContent.toLowerCase();
         if (name.includes(searchTerm)) {
@@ -400,7 +400,7 @@ function filterDatabases(searchTerm) {
 // Disconnect from Database
 async function disconnectDatabase(dbKey, event) {
     event.stopPropagation();
-    
+
     if (!confirm(`Disconnect from ${databases[dbKey].name}?`)) {
         return;
     }
@@ -416,9 +416,9 @@ async function disconnectDatabase(dbKey, event) {
             showMessage('Connection removed', 'success');
             if (currentDatabase === dbKey) {
                 currentDatabase = null;
-                document.getElementById('explorerContent').innerHTML = 
+                document.getElementById('explorerContent').innerHTML =
                     '<div class="empty-state"><p class="text-muted"><i class="fas fa-arrow-left"></i> Select a database from the left sidebar</p></div>';
-                document.getElementById('editorContent').innerHTML = 
+                document.getElementById('editorContent').innerHTML =
                     '<div class="welcome-message"><h6>Welcome to Database Monitor</h6><p>Connection removed. Select another database to continue.</p></div>';
             }
             loadDatabases();
@@ -436,12 +436,12 @@ async function loadDatabases() {
     try {
         const response = await fetch('/api/databases');
         const databasesList = await response.json();
-        
+
         databases = {};
         databasesList.forEach(db => {
             databases[db.key] = db;
         });
-        
+
         renderDatabaseList();
     } catch (error) {
         console.error('Error loading databases:', error);
@@ -452,21 +452,21 @@ async function loadDatabases() {
 // Render database list in sidebar
 function renderDatabaseList() {
     const databaseList = document.getElementById('databaseList');
-    
+
     if (Object.keys(databases).length === 0) {
         databaseList.innerHTML = '<div class="text-muted">No databases configured</div>';
         return;
     }
-    
+
     let html = '';
     Object.keys(databases).forEach(dbKey => {
         const db = databases[dbKey];
         const status = db.status;
         const isOnline = status.connected;
         const statusClass = isOnline ? 'online' : 'offline';
-        
+
         html += `
-            <div class="database-item ${currentDatabase === dbKey ? 'active' : ''}" 
+            <div class="database-item ${currentDatabase === dbKey ? 'active' : ''}"
                  onclick="selectDatabase('${dbKey}')">
                 <div class="database-item-name">
                     <i class="fas fa-database"></i>
@@ -483,7 +483,7 @@ function renderDatabaseList() {
             </div>
         `;
     });
-    
+
     databaseList.innerHTML = html;
 }
 
@@ -500,25 +500,25 @@ async function selectDatabase(dbKey) {
     currentDatabase = dbKey;
     currentSchema = null;
     currentTable = null;
-    
+
     renderDatabaseList();
-    
+
     const db = databases[dbKey];
     const explorerTitle = document.getElementById('explorerTitle');
     explorerTitle.textContent = db.name;
-    
+
     const explorerContent = document.getElementById('explorerContent');
     explorerContent.innerHTML = '<div class="loader-message"><i class="fas fa-spinner fa-spin"></i> Loading schemas...</div>';
-    
+
     try {
         const response = await fetch(`/api/database/${dbKey}/schemas`);
         const data = await response.json();
-        
+
         if (data.error) {
             showExplorerError(data.error);
             return;
         }
-        
+
         renderSchemas(dbKey, data.schemas);
     } catch (error) {
         console.error('Error loading schemas:', error);
@@ -529,9 +529,9 @@ async function selectDatabase(dbKey) {
 // Render schemas
 function renderSchemas(dbKey, schemas) {
     const explorerContent = document.getElementById('explorerContent');
-    
+
     let html = '<div class="tree-item">';
-    
+
     schemas.forEach(schema => {
         const schemaId = `${dbKey}-schema-${schema}`;
         html += `
@@ -547,7 +547,7 @@ function renderSchemas(dbKey, schemas) {
             <div id="${schemaId}-tables" class="tree-children hidden"></div>
         `;
     });
-    
+
     html += '</div>';
     explorerContent.innerHTML = html;
 }
@@ -556,11 +556,11 @@ function renderSchemas(dbKey, schemas) {
 async function toggleSchemaTables(dbKey, schema, toggleBtn) {
     const schemaId = `${dbKey}-schema-${schema}`;
     const tablesContainer = document.getElementById(`${schemaId}-tables`);
-    
+
     if (!tablesContainer) return;
-    
+
     const isHidden = tablesContainer.classList.contains('hidden');
-    
+
     if (isHidden) {
         // Load tables
         loadSchemaTables(dbKey, schema);
@@ -577,17 +577,17 @@ async function loadSchemaTables(dbKey, schema) {
     try {
         const response = await fetch(`/api/database/${dbKey}/schema/${schema}/tables`);
         const data = await response.json();
-        
+
         if (data.error) {
             console.error('Error loading tables:', data.error);
             return;
         }
-        
+
         const schemaId = `${dbKey}-schema-${schema}`;
         const tablesContainer = document.getElementById(`${schemaId}-tables`);
-        
+
         let html = '';
-        
+
         // Render tables
         if (data.tables && data.tables.length > 0) {
             html += '<div style="margin-bottom: 10px;">';
@@ -602,7 +602,7 @@ async function loadSchemaTables(dbKey, schema) {
             });
             html += '</div>';
         }
-        
+
         // Render views
         if (data.views && data.views.length > 0) {
             html += '<div>';
@@ -617,11 +617,11 @@ async function loadSchemaTables(dbKey, schema) {
             });
             html += '</div>';
         }
-        
+
         if (!html) {
             html = '<div class="text-muted" style="padding: 10px; font-size: 0.9rem;">No tables or views</div>';
         }
-        
+
         tablesContainer.innerHTML = html;
     } catch (error) {
         console.error('Error loading schema tables:', error);
@@ -632,10 +632,10 @@ async function loadSchemaTables(dbKey, schema) {
 function selectSchema(dbKey, schema) {
     currentSchema = schema;
     currentTable = null;
-    
+
     const editorTitle = document.getElementById('editorTitle');
     editorTitle.textContent = `SQL Editor - ${schema}`;
-    
+
     const editorContent = document.getElementById('editorContent');
     editorContent.innerHTML = `
         <div class="sql-editor-container">
@@ -648,7 +648,7 @@ function selectSchema(dbKey, schema) {
                 </button>
             </div>
             <textarea class="sql-textarea" id="sqlEditor" placeholder="Enter SQL query here...
-            
+
 Example:
 SELECT * FROM your_table LIMIT 10;"></textarea>
             <div id="queryResults"></div>
@@ -659,22 +659,22 @@ SELECT * FROM your_table LIMIT 10;"></textarea>
 // Select a table
 async function selectTable(dbKey, schema, table) {
     currentTable = table;
-    
+
     const editorTitle = document.getElementById('editorTitle');
     editorTitle.textContent = `Table: ${table}`;
-    
+
     const editorContent = document.getElementById('editorContent');
     editorContent.innerHTML = '<div class="loader-message"><i class="fas fa-spinner fa-spin"></i> Loading table data...</div>';
-    
+
     try {
         const response = await fetch(`/api/database/${dbKey}/schema/${schema}/table/${table}`);
         const data = await response.json();
-        
+
         if (data.error) {
             showEditorError(data.error);
             return;
         }
-        
+
         renderTablePreview(table, data);
     } catch (error) {
         console.error('Error loading table:', error);
@@ -685,22 +685,22 @@ async function selectTable(dbKey, schema, table) {
 // Select a view (same as table)
 async function selectView(dbKey, schema, view) {
     currentTable = view;
-    
+
     const editorTitle = document.getElementById('editorTitle');
     editorTitle.textContent = `View: ${view}`;
-    
+
     const editorContent = document.getElementById('editorContent');
     editorContent.innerHTML = '<div class="loader-message"><i class="fas fa-spinner fa-spin"></i> Loading view data...</div>';
-    
+
     try {
         const response = await fetch(`/api/database/${dbKey}/schema/${schema}/table/${view}`);
         const data = await response.json();
-        
+
         if (data.error) {
             showEditorError(data.error);
             return;
         }
-        
+
         renderTablePreview(view, data);
     } catch (error) {
         console.error('Error loading view:', error);
@@ -713,23 +713,23 @@ function renderTablePreview(tableName, tableData) {
     const editorContent = document.getElementById('editorContent');
     const columns = tableData.columns || [];
     const rows = tableData.data || [];
-    
+
     let html = '<div class="table-preview-container">';
-    
+
     // Preview Data first (more important)
     if (rows.length > 0) {
         html += '<div>';
         html += `<div class="results-header">Preview Data (${rows.length} rows)</div>`;
         html += '<div class="table-scroll-wrapper">';
         html += '<table class="results-table">';
-        
+
         // Table header
         html += '<thead><tr>';
         columns.forEach(col => {
             html += `<th>${col.name}</th>`;
         });
         html += '</tr></thead>';
-        
+
         // Table body
         html += '<tbody>';
         rows.forEach(row => {
@@ -742,14 +742,14 @@ function renderTablePreview(tableName, tableData) {
             html += '</tr>';
         });
         html += '</tbody>';
-        
+
         html += '</table>';
         html += '</div>';
         html += '</div>';
     } else {
         html += '<div class="text-muted" style="padding: 20px; text-align: center;">No data in table</div>';
     }
-    
+
     // Column Information — collapsible, closed by default
     html += `
         <div class="columns-section">
@@ -772,7 +772,7 @@ function renderTablePreview(tableName, tableData) {
     html += `
             </div>
         </div>`;
-    
+
     html += '</div>';
     editorContent.innerHTML = html;
 }
@@ -781,15 +781,15 @@ function renderTablePreview(tableName, tableData) {
 async function executeSQLQuery(dbKey, schema) {
     const sqlEditor = document.getElementById('sqlEditor');
     const sql = sqlEditor.value.trim();
-    
+
     if (!sql) {
         showMessage('Please enter a SQL query', 'warning');
         return;
     }
-    
+
     const queryResults = document.getElementById('queryResults');
     queryResults.innerHTML = '<div class="loader-message"><i class="fas fa-spinner fa-spin"></i> Executing query...</div>';
-    
+
     try {
         const response = await fetch(`/api/database/${dbKey}/execute`, {
             method: 'POST',
@@ -798,9 +798,9 @@ async function executeSQLQuery(dbKey, schema) {
             },
             body: JSON.stringify({ sql: sql })
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success) {
             renderQueryResults(result);
         } else {
@@ -815,26 +815,26 @@ async function executeSQLQuery(dbKey, schema) {
 // Render query results
 function renderQueryResults(result) {
     const queryResults = document.getElementById('queryResults');
-    
+
     let html = '<div class="results-container">';
-    
+
     if (result.data) {
         // SELECT query results
         const columns = result.columns || [];
         const rows = result.data || [];
-        
+
         html += `<div class="results-header">Results (${rows.length} rows)</div>`;
-        
+
         if (rows.length > 0) {
             html += '<table class="results-table">';
-            
+
             // Table header
             html += '<thead><tr>';
             columns.forEach(col => {
                 html += `<th>${col}</th>`;
             });
             html += '</tr></thead>';
-            
+
             // Table body
             html += '<tbody>';
             rows.forEach(row => {
@@ -847,7 +847,7 @@ function renderQueryResults(result) {
                 html += '</tr>';
             });
             html += '</tbody>';
-            
+
             html += '</table>';
         } else {
             html += '<div class="text-muted" style="padding: 20px;">No rows returned</div>';
@@ -858,7 +858,7 @@ function renderQueryResults(result) {
             <i class="fas fa-check-circle"></i> ${result.message}
         </div>`;
     }
-    
+
     html += '</div>';
     queryResults.innerHTML = html;
 }
@@ -888,14 +888,14 @@ function showMessage(message, type = 'info') {
     const queryResults = document.getElementById('queryResults');
     const alertClass = type === 'danger' ? 'alert-danger' : type === 'success' ? 'alert-success' : 'alert-info';
     const icon = type === 'danger' ? 'fa-times-circle' : type === 'success' ? 'fa-check-circle' : 'fa-info-circle';
-    
+
     const html = `
         <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
             <i class="fas ${icon}"></i> ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     `;
-    
+
     if (queryResults) {
         queryResults.innerHTML = html;
     }
@@ -907,7 +907,7 @@ function showError(message) {
             <i class="fas fa-times-circle"></i> ${message}
         </div>
     `;
-    
+
     const explorerContent = document.getElementById('explorerContent');
     if (explorerContent) {
         explorerContent.innerHTML = html;
@@ -920,7 +920,7 @@ function showExplorerError(message) {
             <i class="fas fa-times-circle"></i> ${message}
         </div>
     `;
-    
+
     const explorerContent = document.getElementById('explorerContent');
     if (explorerContent) {
         explorerContent.innerHTML = html;
@@ -933,7 +933,7 @@ function showEditorError(message) {
             <i class="fas fa-times-circle"></i> ${message}
         </div>
     `;
-    
+
     const editorContent = document.getElementById('editorContent');
     if (editorContent) {
         editorContent.innerHTML = html;

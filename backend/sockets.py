@@ -4,7 +4,7 @@ from flask import session
 from flask_socketio import emit
 
 from backend import socketio
-from backend.connection import DATABASES, db_status, check_db_status
+from backend.connection import DATABASES, check_db_status, db_status
 
 
 @socketio.on("connect")

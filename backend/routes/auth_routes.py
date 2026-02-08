@@ -1,11 +1,11 @@
 """Authentication routes — login, logout, registration."""
 
-from flask import Blueprint, render_template, redirect, request, session, url_for
+from flask import Blueprint, redirect, render_template, request, session, url_for
 
 from backend.auth import (
     AUTH_MODE,
-    authenticate,
     any_users_exist,
+    authenticate,
     create_user,
 )
 
@@ -36,6 +36,7 @@ def login():
             session["user_id"] = username.lower()
 
             from backend.connection import load_saved_connections
+
             load_saved_connections(user_id=username.lower())
 
             return redirect(url_for("views.index"))
@@ -71,10 +72,12 @@ def register():
         else:
             ok, msg = create_user(username, password)
             if ok:
-                return redirect(url_for(
-                    "auth_views.login",
-                    success=f'Account "{username}" created! You can now sign in.',
-                ))
+                return redirect(
+                    url_for(
+                        "auth_views.login",
+                        success=f'Account "{username}" created! You can now sign in.',
+                    )
+                )
             error = msg
 
     return render_template("register.html", error=error)

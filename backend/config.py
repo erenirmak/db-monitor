@@ -16,11 +16,7 @@ class Config:
 
     # Directory where encrypted credentials DB + secret key are stored.
     # Override via the  DB_MONITOR_DATA_DIR  env var.
-    DATA_DIR = os.environ.get(
-        "DB_MONITOR_DATA_DIR", str(BASE_DIR / "data")
-    )
+    DATA_DIR = os.environ.get("DB_MONITOR_DATA_DIR", str(BASE_DIR / "data"))
 
     # Permanent session lifetime (seconds).  Default: 7 days.
-    PERMANENT_SESSION_LIFETIME = int(
-        os.environ.get("SESSION_LIFETIME", 7 * 24 * 3600)
-    )
+    PERMANENT_SESSION_LIFETIME = int(os.environ.get("SESSION_LIFETIME", 7 * 24 * 3600))

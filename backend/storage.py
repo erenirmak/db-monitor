@@ -30,7 +30,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from backend.crypto import encrypt, decrypt
+from backend.crypto import decrypt, encrypt
 
 _db_path: Path | None = None
 
@@ -64,9 +64,7 @@ def init_storage(data_dir: str | Path) -> None:
 
         # Migrate: add user_id column if missing (pre-existing DBs)
         try:
-            conn.execute(
-                "ALTER TABLE saved_connections ADD COLUMN user_id TEXT NOT NULL DEFAULT ''"
-            )
+            conn.execute("ALTER TABLE saved_connections ADD COLUMN user_id TEXT NOT NULL DEFAULT ''")
             print("Migration: added user_id column to saved_connections")
         except sqlite3.OperationalError:
             pass  # column already exists
@@ -81,6 +79,7 @@ def _get_conn() -> sqlite3.Connection:
 # ------------------------------------------------------------------
 # Write operations
 # ------------------------------------------------------------------
+
 
 def save_connection(
     db_key: str,
@@ -131,15 +130,14 @@ def save_connection(
 def delete_connection(db_key: str) -> bool:
     """Remove a saved connection.  Returns True if a row was deleted."""
     with _get_conn() as conn:
-        cur = conn.execute(
-            "DELETE FROM saved_connections WHERE db_key = ?", (db_key,)
-        )
+        cur = conn.execute("DELETE FROM saved_connections WHERE db_key = ?", (db_key,))
         return cur.rowcount > 0
 
 
 # ------------------------------------------------------------------
 # Read operations
 # ------------------------------------------------------------------
+
 
 def load_all_connections(user_id: str = "") -> List[Dict[str, Any]]:
     """
@@ -151,9 +149,7 @@ def load_all_connections(user_id: str = "") -> List[Dict[str, Any]]:
     """
     with _get_conn() as conn:
         conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            "SELECT * FROM saved_connections WHERE user_id = ?", (user_id,)
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM saved_connections WHERE user_id = ?", (user_id,)).fetchall()
 
     results: list[dict[str, Any]] = []
     for row in rows:

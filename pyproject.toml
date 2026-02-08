@@ -15,6 +15,18 @@ dependencies = [
     "cryptography>=46.0.4",
 ]
 
+[dependency-groups]
+lint = [
+    "pre-commit>=4.5.1",
+    "ruff>=0.14.10",
+]
+
+[tool.ruff]
+line-length = 112
+
+[tool.ruff.lint]
+select = ["I"]
+
 [project.optional-dependencies]
 ldap = ["ldap3>=2.9.0"]
 

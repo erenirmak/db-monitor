@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import time
 import threading
+import time
 
-from backend.connection import DATABASES, db_status, check_db_status
+from backend.connection import DATABASES, check_db_status, db_status
 
 
 def monitor_databases(app, socketio, interval: int = 5) -> None:

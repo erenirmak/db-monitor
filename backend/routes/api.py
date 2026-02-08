@@ -3,19 +3,20 @@
 from __future__ import annotations
 
 import json
-from flask import Blueprint, request, jsonify, session
+
+from flask import Blueprint, jsonify, request, session
 from sqlalchemy import inspect, text
 
 from backend.auth import login_required
 from backend.connection import (
     DATABASES,
-    db_status,
     build_connection_string,
+    db_status,
     get_db_connection,
-    test_connection_string,
-    register_connection,
-    unregister_connection,
     get_user_databases,
+    register_connection,
+    test_connection_string,
+    unregister_connection,
     user_owns_db,
 )
 
@@ -25,6 +26,7 @@ api_bp = Blueprint("api", __name__)
 # ------------------------------------------------------------------
 # Database listing
 # ------------------------------------------------------------------
+
 
 @api_bp.route("/databases")
 @login_required
@@ -46,6 +48,7 @@ def get_databases():
 # ------------------------------------------------------------------
 # Schema / table introspection
 # ------------------------------------------------------------------
+
 
 @api_bp.route("/database/<db_key>/schemas")
 @login_required
@@ -109,19 +112,12 @@ def get_table_info(db_key: str, schema: str, table: str):
             return jsonify({"error": "Connection failed"}), 500
 
         inspector = inspect(engine)
-        columns_info = inspector.get_columns(
-            table, schema=schema if schema != "default" else None
-        )
-        columns = [
-            {"name": c["name"], "type": str(c["type"]), "nullable": c["nullable"]}
-            for c in columns_info
-        ]
+        columns_info = inspector.get_columns(table, schema=schema if schema != "default" else None)
+        columns = [{"name": c["name"], "type": str(c["type"]), "nullable": c["nullable"]} for c in columns_info]
 
         with engine.connect() as conn:
             if schema and schema != "default":
-                result = conn.execute(
-                    text(f"SELECT * FROM {schema}.{table} LIMIT 100")
-                )
+                result = conn.execute(text(f"SELECT * FROM {schema}.{table} LIMIT 100"))
             else:
                 result = conn.execute(text(f"SELECT * FROM {table} LIMIT 100"))
             rows = result.fetchall()
@@ -135,6 +131,7 @@ def get_table_info(db_key: str, schema: str, table: str):
 # ------------------------------------------------------------------
 # SQL execution
 # ------------------------------------------------------------------
+
 
 @api_bp.route("/database/<db_key>/execute", methods=["POST"])
 @login_required
@@ -170,10 +167,7 @@ def execute_sql(db_key: str):
                 {
                     "success": True,
                     "rows_affected": result.rowcount,
-                    "message": (
-                        f"Query executed successfully. "
-                        f"Rows affected: {result.rowcount}"
-                    ),
+                    "message": (f"Query executed successfully. Rows affected: {result.rowcount}"),
                 }
             )
     except Exception as exc:
@@ -183,6 +177,7 @@ def execute_sql(db_key: str):
 # ------------------------------------------------------------------
 # Connection management
 # ------------------------------------------------------------------
+
 
 @api_bp.route("/test-connection", methods=["POST"])
 @login_required
@@ -195,26 +190,18 @@ def api_test_connection():
         extra_json_str = data.get("extra_json", "")
 
         if not db_type or not fields:
-            return jsonify(
-                {"success": False, "error": "Database type and fields are required"}
-            ), 400
+            return jsonify({"success": False, "error": "Database type and fields are required"}), 400
 
         # Parse extra JSON
         extra_options = _parse_extra_json(extra_json_str)
         if extra_options is None:
-            return jsonify(
-                {"success": False, "error": "Invalid Extra JSON — must be valid JSON object"}
-            ), 400
+            return jsonify({"success": False, "error": "Invalid Extra JSON — must be valid JSON object"}), 400
 
         connection_string = build_connection_string(db_type, fields)
         if not connection_string:
-            return jsonify(
-                {"success": False, "error": f"Unsupported database type: {db_type}"}
-            ), 400
+            return jsonify({"success": False, "error": f"Unsupported database type: {db_type}"}), 400
 
-        success, message = test_connection_string(
-            db_type, connection_string, extra_options or None
-        )
+        success, message = test_connection_string(db_type, connection_string, extra_options or None)
         return jsonify(
             {
                 "success": success,
@@ -238,33 +225,26 @@ def api_save_connection():
         extra_json_str = data.get("extra_json", "")
 
         if not name or not db_type or not fields:
-            return jsonify(
-                {"success": False, "error": "Connection name, type, and fields are required"}
-            ), 400
+            return jsonify({"success": False, "error": "Connection name, type, and fields are required"}), 400
 
         extra_options = _parse_extra_json(extra_json_str)
         if extra_options is None:
-            return jsonify(
-                {"success": False, "error": "Invalid Extra JSON — must be valid JSON object"}
-            ), 400
+            return jsonify({"success": False, "error": "Invalid Extra JSON — must be valid JSON object"}), 400
 
         connection_string = build_connection_string(db_type, fields)
         if not connection_string:
-            return jsonify(
-                {"success": False, "error": f"Unsupported database type: {db_type}"}
-            ), 400
+            return jsonify({"success": False, "error": f"Unsupported database type: {db_type}"}), 400
 
         # Test before saving
-        success, message = test_connection_string(
-            db_type, connection_string, extra_options or None
-        )
+        success, message = test_connection_string(db_type, connection_string, extra_options or None)
         if not success:
-            return jsonify(
-                {"success": False, "error": f"Connection test failed: {message}"}
-            ), 400
+            return jsonify({"success": False, "error": f"Connection test failed: {message}"}), 400
 
         db_key = register_connection(
-            name, db_type, connection_string, extra_options or None,
+            name,
+            db_type,
+            connection_string,
+            extra_options or None,
             fields=fields,
             user_id=session.get("user_id", ""),
         )
@@ -294,14 +274,13 @@ def api_disconnect(db_key: str):
         return jsonify({"success": False, "error": "Database not found"}), 404
 
     print(f"Database connection removed: {db_key} ({name})")
-    return jsonify(
-        {"success": True, "message": f'Connection "{name}" removed successfully'}
-    )
+    return jsonify({"success": True, "message": f'Connection "{name}" removed successfully'})
 
 
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
+
 
 def _parse_extra_json(raw: str) -> dict | None:
     """

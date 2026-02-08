@@ -33,6 +33,7 @@ db_status: Dict[str, Dict[str, Any]] = {}
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def generate_db_key() -> str:
     """Generate a random 12-char key for a new connection."""
     return "".join(random.choices(string.ascii_lowercase + string.digits, k=12))
@@ -63,10 +64,7 @@ def build_connection_string(db_type: str, fields: Dict[str, str]) -> Optional[st
         if db_type == "mssql":
             port = fields.get("port", "1433")
             driver = fields.get("driver", "ODBC+Driver+17+for+SQL+Server")
-            return (
-                f"mssql+pyodbc://{credentials}{host}:{port}/{database}"
-                f"?driver={driver}"
-            )
+            return f"mssql+pyodbc://{credentials}{host}:{port}/{database}?driver={driver}"
 
         if db_type == "oracle":
             port = fields.get("port", "1521")
@@ -134,6 +132,7 @@ def _create_engine_from_url(
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def test_connection_string(
     db_type: str,
     connection_string: str,
@@ -141,9 +140,7 @@ def test_connection_string(
 ) -> Tuple[bool, str]:
     """Test whether a connection URL is reachable.  Returns (ok, message)."""
     try:
-        engine = _create_engine_from_url(
-            connection_string, extra_options, use_null_pool=True
-        )
+        engine = _create_engine_from_url(connection_string, extra_options, use_null_pool=True)
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         engine.dispose()
@@ -231,6 +228,7 @@ def register_connection(
     if persist:
         try:
             from backend.storage import save_connection
+
             save_connection(
                 db_key=db_key,
                 display_name=name,
@@ -271,6 +269,7 @@ def unregister_connection(db_key: str) -> Optional[str]:
     # Remove from encrypted SQLite storage
     try:
         from backend.storage import delete_connection
+
         delete_connection(db_key)
     except Exception as exc:
         print(f"Warning: failed to delete persisted connection {db_key}: {exc}")
@@ -311,10 +310,7 @@ def load_saved_connections(user_id: str = "") -> int:
 
 def get_user_databases(user_id: str) -> Dict[str, Dict[str, Any]]:
     """Return only the DATABASES entries belonging to *user_id*."""
-    return {
-        k: v for k, v in DATABASES.items()
-        if v.get("user_id", "") == user_id
-    }
+    return {k: v for k, v in DATABASES.items() if v.get("user_id", "") == user_id}
 
 
 def user_owns_db(user_id: str, db_key: str) -> bool:

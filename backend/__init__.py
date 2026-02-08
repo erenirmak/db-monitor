@@ -18,10 +18,11 @@ def create_app() -> Flask:
 
     # ---- Encryption + persistent storage + auth --------------------
     from datetime import timedelta
+
+    from backend.auth import init_auth
     from backend.config import Config as _cfg
     from backend.crypto import init_crypto
     from backend.storage import init_storage
-    from backend.auth import init_auth
 
     init_crypto(_cfg.DATA_DIR)
     init_storage(_cfg.DATA_DIR)
@@ -29,13 +30,12 @@ def create_app() -> Flask:
     # Connections are loaded per-user on login — no global load_saved_connections().
 
     # Make sessions permanent so the cookie survives browser restarts
-    app.permanent_session_lifetime = timedelta(
-        seconds=_cfg.PERMANENT_SESSION_LIFETIME
-    )
+    app.permanent_session_lifetime = timedelta(seconds=_cfg.PERMANENT_SESSION_LIFETIME)
     # -----------------------------------------------------------------
 
     # Register blueprints
     from backend.routes import register_blueprints
+
     register_blueprints(app)
 
     # Register SocketIO handlers

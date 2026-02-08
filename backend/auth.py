@@ -31,7 +31,7 @@ import os
 import sqlite3
 from functools import wraps
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
 
 from flask import redirect, request, session, url_for
 
@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS users (
 # ---------------------------------------------------------------------------
 # Initialisation
 # ---------------------------------------------------------------------------
+
 
 def init_auth(data_dir: str | Path) -> None:
     """Initialise the auth sub-system.  Must be called once at startup."""
@@ -89,6 +90,7 @@ def _get_conn() -> sqlite3.Connection:
 # Password helpers
 # ---------------------------------------------------------------------------
 
+
 def _hash_password(password: str) -> str:
     """Hash a password with PBKDF2-HMAC-SHA256 + random salt."""
     salt = os.urandom(16)
@@ -112,6 +114,7 @@ def _verify_password(password: str, stored: str) -> bool:
 # User management (local mode)
 # ---------------------------------------------------------------------------
 
+
 def create_user(username: str, password: str) -> tuple[bool, str]:
     """Create a new local user.  Returns (ok, message)."""
     username = username.strip().lower()
@@ -121,14 +124,13 @@ def create_user(username: str, password: str) -> tuple[bool, str]:
         return False, "Password must be at least 4 characters."
 
     with _get_conn() as conn:
-        existing = conn.execute(
-            "SELECT 1 FROM users WHERE username = ?", (username,)
-        ).fetchone()
+        existing = conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone()
         if existing:
             return False, f'User "{username}" already exists.'
 
         hashed = _hash_password(password)
         from datetime import datetime
+
         conn.execute(
             "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
             (username, hashed, datetime.now().isoformat()),
@@ -147,6 +149,7 @@ def any_users_exist() -> bool:
 # Authentication logic
 # ---------------------------------------------------------------------------
 
+
 def authenticate_local(username: str, password: str) -> tuple[bool, str]:
     """Verify a local username + password.  Returns (success, message)."""
     username = username.strip().lower()
@@ -154,9 +157,7 @@ def authenticate_local(username: str, password: str) -> tuple[bool, str]:
         return False, "Username is required."
 
     with _get_conn() as conn:
-        row = conn.execute(
-            "SELECT password_hash FROM users WHERE username = ?", (username,)
-        ).fetchone()
+        row = conn.execute("SELECT password_hash FROM users WHERE username = ?", (username,)).fetchone()
 
     if row is None:
         return False, "Invalid username or password."
@@ -250,6 +251,7 @@ def authenticate(username: str, password: str) -> tuple[bool, str]:
 # Session helper
 # ---------------------------------------------------------------------------
 
+
 def get_current_user() -> Optional[str]:
     """Return the logged-in username from the Flask session, or None."""
     return session.get("user_id")
@@ -259,16 +261,18 @@ def get_current_user() -> Optional[str]:
 # Flask decorator / middleware
 # ---------------------------------------------------------------------------
 
+
 def login_required(f):
     """Decorator that protects a route — redirects to /login if not authed."""
+
     @wraps(f)
     def decorated(*args, **kwargs):
         if not session.get("authenticated") or not session.get("user_id"):
-            if request.path.startswith("/api/") or request.headers.get(
-                "X-Requested-With"
-            ) == "XMLHttpRequest":
+            if request.path.startswith("/api/") or request.headers.get("X-Requested-With") == "XMLHttpRequest":
                 from flask import jsonify
+
                 return jsonify({"error": "Authentication required"}), 401
             return redirect(url_for("auth_views.login"))
         return f(*args, **kwargs)
+
     return decorated

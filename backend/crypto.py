@@ -50,9 +50,7 @@ def init_crypto(data_dir: str | Path) -> None:
 
 def _get_fernet() -> Fernet:
     if _fernet is None:
-        raise RuntimeError(
-            "Crypto not initialised — call init_crypto(data_dir) first."
-        )
+        raise RuntimeError("Crypto not initialised — call init_crypto(data_dir) first.")
     return _fernet
 
 

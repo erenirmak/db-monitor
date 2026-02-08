@@ -1,0 +1,26 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.python-version
+
+# Virtual environments
+.venv
+
+# Encrypted credentials & secret key — NEVER commit these
+data
+.env
+example.db
+
+# MD Files
+ARCHITECTURE.md
+GETTING_STARTED.md
+PROJECT_SUMMARY.md
+QUICKSTART.md
+
+# Other files
+run.py
+config_examples.py

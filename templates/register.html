@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register — Database Monitor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #2ecc71;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .login-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 40px 36px 36px 36px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .login-logo {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .login-logo i {
+            font-size: 2.5rem;
+            color: var(--accent-color);
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .login-logo h4 {
+            color: var(--primary-color);
+            font-weight: 700;
+            margin: 0;
+            font-size: 1.4rem;
+        }
+
+        .login-logo p {
+            margin: 4px 0 0 0;
+            color: #7f8c8d;
+            font-size: 0.88rem;
+        }
+
+        .form-label {
+            color: var(--primary-color);
+            font-weight: 600;
+            font-size: 0.88rem;
+        }
+
+        .form-control {
+            border-radius: 8px;
+            padding: 10px 14px;
+            border: 1.5px solid #dce1e6;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-control:focus {
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+        }
+
+        .btn-register {
+            width: 100%;
+            padding: 11px;
+            border-radius: 8px;
+            background: var(--accent-color);
+            border: none;
+            color: white;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .btn-register:hover {
+            background: #27ae60;
+        }
+
+        .btn-register:active {
+            transform: scale(0.98);
+        }
+
+        .alert {
+            border-radius: 8px;
+            font-size: 0.88rem;
+            padding: 10px 14px;
+        }
+
+        .password-wrapper {
+            position: relative;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #95a5a6;
+            cursor: pointer;
+            padding: 0;
+            font-size: 0.9rem;
+        }
+
+        .password-toggle:hover {
+            color: var(--secondary-color);
+        }
+
+        .footer-link {
+            text-align: center;
+            margin-top: 16px;
+            color: #7f8c8d;
+            font-size: 0.88rem;
+        }
+
+        .footer-link a {
+            color: var(--secondary-color);
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .footer-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="login-logo">
+            <i class="fas fa-user-plus"></i>
+            <h4>Database Monitor</h4>
+            <p>Create your account</p>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-circle"></i> {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="POST" autocomplete="off">
+            <div class="mb-3">
+                <label class="form-label" for="username">
+                    <i class="fas fa-user"></i> Username
+                </label>
+                <input type="text" class="form-control" id="username" name="username"
+                       placeholder="Choose a username" required autofocus>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="password">
+                    <i class="fas fa-lock"></i> Password
+                </label>
+                <div class="password-wrapper">
+                    <input type="password" class="form-control" id="password" name="password"
+                           placeholder="Choose a strong password" required>
+                    <button type="button" class="password-toggle" onclick="togglePassword('password', 'toggleIcon1')">
+                        <i class="fas fa-eye" id="toggleIcon1"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="password_confirm">
+                    <i class="fas fa-lock"></i> Confirm Password
+                </label>
+                <div class="password-wrapper">
+                    <input type="password" class="form-control" id="password_confirm" name="password_confirm"
+                           placeholder="Confirm your password" required>
+                    <button type="button" class="password-toggle" onclick="togglePassword('password_confirm', 'toggleIcon2')">
+                        <i class="fas fa-eye" id="toggleIcon2"></i>
+                    </button>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-register">
+                <i class="fas fa-shield-halved"></i> Create Account
+            </button>
+        </form>
+
+        <div class="footer-link">
+            Already have an account? <a href="/login">Sign In</a>
+        </div>
+    </div>
+
+    <script>
+        function togglePassword(inputId, iconId) {
+            const input = document.getElementById(inputId);
+            const icon = document.getElementById(iconId);
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.replace('fa-eye', 'fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.replace('fa-eye-slash', 'fa-eye');
+            }
+        }
+    </script>
+</body>
+</html>

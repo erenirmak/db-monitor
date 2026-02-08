@@ -2,6 +2,11 @@
 
 A self-hosted Flask web application for monitoring and managing multiple database connections. Features a 3-panel layout with database browser, schema explorer, and SQL editor — all behind multi-user authentication with encrypted credential storage.
 
+| | Status |
+|---|---|
+| **Tested** | PostgreSQL, MySQL, SQLite, Local Auth |
+| **Experimental** | LDAP auth, MS SQL Server, Oracle — implemented but not yet verified in production |
+
 ---
 
 ## Features
@@ -13,7 +18,7 @@ A self-hosted Flask web application for monitoring and managing multiple databas
 
 **Multi-User Authentication**
 - Local username + password accounts (PBKDF2-HMAC-SHA256, 260 000 iterations)
-- Optional LDAP / LLDAP backend (direct-bind or search-bind, group filtering)
+- Optional LDAP / LLDAP backend (direct-bind or search-bind, group filtering) *(experimental)*
 - Per-user connection isolation — each user sees only their own databases
 
 **Encrypted Persistence**
@@ -61,7 +66,9 @@ The app starts at **http://localhost:5000**.
 
 On first launch you'll be redirected to the **Register** page to create your account. After that, log in and start adding database connections from the UI.
 
-### LDAP Support (optional)
+### LDAP Support (optional · experimental)
+
+LDAP authentication is implemented but has not been tested against a live directory yet. Feedback and bug reports are welcome.
 
 ```bash
 # Install the ldap extra
@@ -114,12 +121,12 @@ All configuration is done through **environment variables** — no config files 
 
 Connections are added via the **Add Connection** modal in the sidebar.
 
-| Engine | Driver / Scheme | Default Port |
-|---|---|---|
-| PostgreSQL | `postgresql://` | 5432 |
-| MySQL | `mysql+pymysql://` | 3306 |
-| MS SQL Server | `mssql+pyodbc://` (ODBC Driver 17) | 1433 |
-| Oracle | `oracle+cx_oracle://` | 1521 |
+| Engine | Driver / Scheme | Default Port | |
+|---|---|---|---|
+| PostgreSQL | `postgresql://` | 5432 | |
+| MySQL | `mysql+pymysql://` | 3306 | |
+| MS SQL Server | `mssql+pyodbc://` (ODBC Driver 17) | 1433 | *(experimental)* |
+| Oracle | `oracle+cx_oracle://` | 1521 | *(experimental)* |
 | SQLite | `sqlite:///` (file path) | — |
 
 > MongoDB, OpenSearch, and Elasticsearch are accepted for status monitoring but don't support the schema explorer or SQL editor (non-SQLAlchemy engines).
@@ -277,4 +284,4 @@ All API routes require authentication. Unauthenticated requests receive a `401` 
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE) for details.

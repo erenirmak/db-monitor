@@ -138,6 +138,33 @@ def create_user(username: str, password: str) -> tuple[bool, str]:
     return True, f'User "{username}" created successfully.'
 
 
+def change_password(username: str, old_password: str, new_password: str) -> tuple[bool, str]:
+    """Change a local user's password. Returns (ok, message)."""
+    username = username.strip().lower()
+    if AUTH_MODE != "local":
+        return False, "Password change is only supported in local mode."
+
+    if not username:
+        return False, "Username is required."
+
+    with _get_conn() as conn:
+        row = conn.execute("SELECT password_hash FROM users WHERE username = ?", (username,)).fetchone()
+        if not row:
+            return False, "User not found."
+
+        # Verify old password
+        if not _verify_password(old_password, row[0]):
+            return False, "Incorrect old password."
+
+        if len(new_password) < 4:
+            return False, "New password must be at least 4 characters."
+
+        hashed = _hash_password(new_password)
+        conn.execute("UPDATE users SET password_hash = ? WHERE username = ?", (hashed, username))
+
+    return True, "Password changed successfully."
+
+
 def any_users_exist() -> bool:
     """Check if any local user accounts have been created yet."""
     with _get_conn() as conn:

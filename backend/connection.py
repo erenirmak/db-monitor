@@ -74,6 +74,9 @@ def build_connection_string(db_type: str, fields: Dict[str, str]) -> Optional[st
             file_path = fields.get("filePath", "database.db")
             return f"sqlite:///{file_path}"
 
+        if db_type == "folder":
+            return "folder://"
+
         return None  # mongodb, opensearch, elasticsearch, etc.
     except Exception as exc:
         print(f"Error building connection string: {exc}")
@@ -139,6 +142,9 @@ def test_connection_string(
     extra_options: Optional[Dict[str, Any]] = None,
 ) -> Tuple[bool, str]:
     """Test whether a connection URL is reachable.  Returns (ok, message)."""
+    if db_type == "folder":
+        return True, "Folder created"
+
     try:
         engine = _create_engine_from_url(connection_string, extra_options, use_null_pool=True)
         with engine.connect() as conn:
@@ -155,6 +161,11 @@ def get_db_connection(db_key: str) -> Any:
         db_config = DATABASES.get(db_key)
         if db_config is None:
             return None
+
+        # Skip creating engine for folders
+        if db_config.get("engine") == "folder":
+            return None
+
         try:
             engine = _create_engine_from_url(
                 db_config["url"],
@@ -163,6 +174,7 @@ def get_db_connection(db_key: str) -> Any:
             )
             db_connections[db_key] = engine
         except Exception as exc:
+            # Only log errors for real database types, suppress for known virtual types if any
             print(f"Error creating connection for {db_key}: {exc}")
             return None
     return db_connections[db_key]
@@ -170,6 +182,16 @@ def get_db_connection(db_key: str) -> Any:
 
 def check_db_status(db_key: str) -> bool:
     """Ping the database and update ``db_status``."""
+    db_config = DATABASES.get(db_key)
+    if db_config and db_config.get("engine") == "folder":
+        # Always return "connected" for folders so they don't show errors
+        db_status[db_key] = {
+            "connected": True,
+            "error": None,
+            "last_check": datetime.now().isoformat(),
+        }
+        return True
+
     try:
         engine = get_db_connection(db_key)
         if engine is None:
@@ -207,20 +229,29 @@ def register_connection(
     *,
     user_id: str = "",
     persist: bool = True,
+    group_name: str = "",
+    sort_order: int = 0,
+    db_key: Optional[str] = None,
 ) -> str:
     """
     Add a new connection to the runtime registry **and** persist it
     (encrypted) to the SQLite store.
 
+    If *db_key* is provided (e.g. update), uses it. Otherwise generates new.
     Returns the db_key.
     """
-    db_key = generate_db_key()
+    if not db_key:
+        db_key = generate_db_key()
+
     DATABASES[db_key] = {
         "engine": db_type,
         "url": connection_string,
         "display_name": name,
         "extra_options": extra_options or {},
+        "fields": fields or {},
         "user_id": user_id,
+        "group_name": group_name,
+        "sort_order": sort_order,
     }
     db_status[db_key] = {"connected": False, "last_check": None, "error": None}
 
@@ -237,6 +268,8 @@ def register_connection(
                 connection_url=connection_string,
                 extra_options=extra_options,
                 user_id=user_id,
+                group_name=group_name,
+                sort_order=sort_order,
             )
         except Exception as exc:
             print(f"Warning: failed to persist connection {db_key}: {exc}")
@@ -288,23 +321,27 @@ def load_saved_connections(user_id: str = "") -> int:
 
     rows = load_all_connections(user_id=user_id)
     count = 0
+    # DATABASES stores connections for ALL users. Do not clear globally.
+
     for row in rows:
         db_key = row["db_key"]
-        # Skip if already loaded (e.g. by another session)
-        if db_key in DATABASES:
-            continue
+        # Update or insert the connection config
         DATABASES[db_key] = {
             "engine": row["engine_type"],
             "url": row["url"],
             "display_name": row["display_name"],
             "extra_options": row.get("extra_options", {}),
+            "fields": row.get("fields", {}),
             "user_id": row.get("user_id", ""),
+            "group_name": row.get("group_name", ""),
+            "sort_order": row.get("sort_order", 0),
         }
-        db_status[db_key] = {"connected": False, "last_check": None, "error": None}
+        if db_key not in db_status:
+            db_status[db_key] = {"connected": False, "last_check": None, "error": None}
         count += 1
 
     if count:
-        print(f"Loaded {count} saved connection(s) for user '{user_id}'.")
+        print(f"Loaded/Updated {count} saved connection(s) for user '{user_id}'.")
     return count
 
 
@@ -319,3 +356,24 @@ def user_owns_db(user_id: str, db_key: str) -> bool:
     if entry is None:
         return False
     return entry.get("user_id", "") == user_id
+
+
+def update_db_metadata(db_key: str, group_name: Optional[str] = None, sort_order: Optional[int] = None) -> bool:
+    """Update runtime and persistent metadata for a connection."""
+    if db_key not in DATABASES:
+        return False
+
+    # Update runtime
+    if group_name is not None:
+        DATABASES[db_key]["group_name"] = group_name
+    if sort_order is not None:
+        DATABASES[db_key]["sort_order"] = sort_order
+
+    # Update persistence
+    try:
+        from backend.storage import update_connection_metadata
+
+        return update_connection_metadata(db_key, group_name, sort_order)
+    except Exception as exc:
+        print(f"Warning: failed to persist metadata update for {db_key}: {exc}")
+        return False

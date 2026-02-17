@@ -45,6 +45,36 @@ html, body {
     overflow: hidden;
     flex-shrink: 0;
     border-right: 1px solid rgba(0, 0, 0, 0.2);
+    transition: width 0.3s ease, min-width 0.3s ease, max-width 0.3s ease;
+}
+
+.sidebar.collapsed {
+    width: 0;
+    min-width: 0;
+    max-width: 0;
+    border: none;
+}
+
+.sidebar-toggle-btn {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 1000;
+    display: none;
+    background-color: var(--primary-color);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.2);
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+}
+
+.sidebar-toggle-btn:hover {
+    background-color: #34495e;
+    color: white;
+}
+
+/* Show toggle button when sidebar is collapsed */
+.app-layout.sidebar-collapsed .sidebar-toggle-btn {
+    display: block;
 }
 
 .sidebar-header {
@@ -73,43 +103,94 @@ html, body {
     display: flex;
     gap: 6px;
     flex-shrink: 0;
+    flex-wrap: wrap; /* Allow wrapping */
+}
+
+/* Sidebar Resizer */
+.sidebar-resizer {
+    width: 6px;
+    cursor: col-resize;
+    background-color: rgba(0,0,0,0.1); /* Subtle visual cue */
+    z-index: 105;
+    flex-shrink: 0;
+    transition: background-color 0.2s;
+}
+
+.sidebar-resizer:hover, .sidebar-resizer.active {
+    background-color: var(--secondary-color); /* Highlight on hover/drag */
+}
+
+/* Disable transition during resize to prevent lag */
+.sidebar.resizing {
+    transition: none !important;
+    pointer-events: none; /* Prevent text selection/clicks inside sidebar while dragging */
 }
 
 .sidebar-buttons .btn {
-    padding: 6px 10px;
-    font-size: 0.95rem;
-    border-radius: 4px;
-    border: none;
-    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8) !important;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 6px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 36px;
-    height: 36px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: none;
+    font-weight: normal;
 }
 
 .sidebar-buttons .btn i {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
 }
 
 .sidebar-buttons .btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff !important;
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
 }
 
 .sidebar-buttons .btn:active {
     transform: translateY(0);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: none;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* Specific button colors on hover only */
+.sidebar-buttons #addConnectionBtn:hover {
+    background: rgba(46, 204, 113, 0.2);
+    border-color: #2ecc71;
+    color: #2ecc71 !important;
+}
+
+.sidebar-buttons #addFolderBtn:hover {
+    background: rgba(241, 196, 15, 0.2);
+    border-color: #f1c40f;
+    color: #f1c40f !important;
+}
+
+.sidebar-buttons #refreshBtn:hover {
+    background: rgba(52, 152, 219, 0.2);
+    border-color: #3498db;
+    color: #3498db !important;
+}
+
+.sidebar-buttons #searchBtn:hover {
+    background: rgba(149, 165, 166, 0.2);
+    border-color: #95a5a6;
+    color: #bdc3c7 !important;
 }
 
 .sidebar-btn {
-    color: white !important;
-    font-weight: 600;
+    /* Legacy override */
 }
 
 .sidebar-btn:hover {
-    opacity: 0.95;
+    opacity: 1;
 }
 
 .search-box {
@@ -498,6 +579,73 @@ html, body {
     color: white;
     border-radius: 8px;
 }
+
+/* Database Groups and Drag & Drop */
+.database-group {
+    margin-bottom: 5px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.group-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.group-header:hover {
+    color: white;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.group-header i {
+    opacity: 0.7;
+    width: 20px;
+}
+
+.group-items {
+    transition: max-height 0.3s ease;
+}
+
+.group-items.hidden {
+    display: none;
+}
+
+.group-items .database-item {
+    margin-left: 12px;
+    width: calc(100% - 12px);
+    border-left-width: 2px;
+}
+
+.ungrouped-items {
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    margin-top: 8px;
+    padding-top: 8px;
+}
+
+/* Drag Visuals */
+.database-item[draggable="true"] {
+    cursor: grab;
+}
+
+.database-item[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+.drag-over {
+    outline: 2px dashed rgba(52, 152, 219, 0.6);
+    outline-offset: -2px;
+    background-color: rgba(52, 152, 219, 0.15) !important;
+}
+
 
 .welcome-message h6 {
     margin-top: 0;
@@ -892,4 +1040,47 @@ html, body {
 #saveConnectionBtn:hover {
     background-color: #2980b9;
     border-color: #2980b9;
+}
+
+/* User Profile Section */
+.user-profile-section {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    margin-top: auto;
+}
+
+.user-profile-section .dropdown-toggle {
+    color: #ecf0f1;
+    padding: 10px;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+    width: 100%;
+    margin: 0;
+}
+
+.user-profile-section .dropdown-toggle:hover,
+.user-profile-section .dropdown-toggle:focus {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.user-profile-section .dropdown-menu {
+    border-color: rgba(255, 255, 255, 0.1);
+    background-color: #34495e;
+    color: #ecf0f1; /* Ensure text visible */
+}
+
+.user-profile-section .dropdown-item {
+    color: #bdc3c7;
+    padding: 8px 16px;
+}
+
+.user-profile-section .dropdown-item:hover,
+.user-profile-section .dropdown-item:focus {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.user-profile-section .dropdown-divider {
+    border-top-color: rgba(255, 255, 255, 0.1);
 }

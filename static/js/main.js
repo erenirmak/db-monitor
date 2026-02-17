@@ -128,6 +128,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Initialize Event Handlers
 function initializeEventHandlers() {
     const addConnectionBtn = document.getElementById('addConnectionBtn');
+    const addFolderBtn = document.getElementById('addFolderBtn');
     const refreshBtn = document.getElementById('refreshBtn');
     const searchBtn = document.getElementById('searchBtn');
     const databaseTypeSelect = document.getElementById('databaseType');
@@ -135,11 +136,102 @@ function initializeEventHandlers() {
     const saveConnectionBtn = document.getElementById('saveConnectionBtn');
     const searchInput = document.getElementById('searchInput');
 
+    // Sidebar Toggle Logic
+    const toggleSidebarBtn = document.getElementById('sidebarToggleBtn');
+    const closeSidebarBtn = document.getElementById('sidebarCloseBtn');
+
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebarPanel');
+        const appLayout = document.querySelector('.app-layout');
+
+        sidebar.classList.toggle('collapsed');
+        appLayout.classList.toggle('sidebar-collapsed');
+    }
+
+    if (toggleSidebarBtn) {
+        toggleSidebarBtn.addEventListener('click', toggleSidebar);
+    }
+
+    if (closeSidebarBtn) {
+        closeSidebarBtn.addEventListener('click', toggleSidebar);
+    }
+
+    // Sidebar Resize Logic
+    const sidebarResizer = document.getElementById('sidebarResizer');
+    if (sidebarResizer) {
+        const sidebar = document.getElementById('sidebarPanel');
+        let isResizing = false;
+        let startX = 0;
+        let startWidth = 0;
+
+        const startResize = (e) => {
+            isResizing = true;
+            startX = e.clientX;
+            startWidth = sidebar.getBoundingClientRect().width;
+
+            sidebar.classList.add('resizing');
+            sidebarResizer.classList.add('active');
+            document.body.style.cursor = 'col-resize';
+
+            // Prevent selection
+            document.body.style.userSelect = 'none';
+
+            document.addEventListener('mousemove', handleResize);
+            document.addEventListener('mouseup', stopResize);
+        };
+
+        const handleResize = (e) => {
+            if (!isResizing) return;
+            // Calculate new width
+            const currentX = e.clientX;
+            const diffX = currentX - startX;
+            const newWidth = Math.max(160, Math.min(600, startWidth + diffX)); // Min 160px, Max 600px
+
+            // Apply via CSS variable on the element style
+            sidebar.style.setProperty('--sidebar-width', `${newWidth}px`);
+        };
+
+        const stopResize = () => {
+            isResizing = false;
+            sidebar.classList.remove('resizing');
+            sidebarResizer.classList.remove('active');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+
+            document.removeEventListener('mousemove', handleResize);
+            document.removeEventListener('mouseup', stopResize);
+        };
+
+        sidebarResizer.addEventListener('mousedown', startResize);
+    }
+
     // Add Connection Button
     addConnectionBtn.addEventListener('click', function() {
         addConnectionModal = new bootstrap.Modal(document.getElementById('addConnectionModal'));
         resetConnectionForm();
         addConnectionModal.show();
+    });
+
+    // Add Folder Button
+    addFolderBtn.addEventListener('click', async function() {
+        const folderName = prompt("Enter folder name:");
+        if (folderName && folderName.trim()) {
+            // We create a "placeholder" connection for the folder
+            // This is a bit of a hack: an empty folder is just a connection with type 'folder'
+            try {
+                await fetch('/api/save-connection', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: folderName.trim(),
+                        type: 'folder',
+                        fields: {},
+                        group: folderName.trim()
+                    })
+                });
+                loadDatabases();
+            } catch(e) { console.error(e); }
+        }
     });
 
     // Refresh Button
@@ -223,11 +315,112 @@ function renderDynamicFields(databaseType) {
 // Reset Connection Form
 function resetConnectionForm() {
     document.getElementById('connectionForm').reset();
+    document.getElementById('connectionId').value = ''; // Clear ID
+    document.getElementById('addConnectionModalLabel').textContent = 'Add New Database Connection';
     document.getElementById('dynamicFieldsContainer').innerHTML = '';
     document.getElementById('connectionMessage').style.display = 'none';
     const extraJsonEl = document.getElementById('extraJson');
     if (extraJsonEl) extraJsonEl.value = '';
+
+    // Hide delete button by default
+    const deleteBtn = document.getElementById('deleteConnectionBtn');
+    if (deleteBtn) {
+        deleteBtn.style.display = 'none';
+        deleteBtn.onclick = null;
+    }
+
     currentConnectionForm = {};
+}
+
+// Edit Connection
+function editConnection(dbKey) {
+    const db = databases[dbKey];
+    if (!db) return;
+
+    // Open modal
+    addConnectionModal = new bootstrap.Modal(document.getElementById('addConnectionModal'));
+    resetConnectionForm();
+
+    // Set title and ID
+    document.getElementById('addConnectionModalLabel').textContent = 'Edit Connection';
+    document.getElementById('connectionId').value = dbKey;
+    document.getElementById('connectionName').value = db.name;
+    document.getElementById('groupName').value = db.group || '';
+
+    // Show delete button
+    const deleteBtn = document.getElementById('deleteConnectionBtn');
+    if (deleteBtn) {
+        deleteBtn.style.display = 'inline-block';
+        deleteBtn.onclick = async function() {
+            if (!confirm(`Are you sure you want to delete the connection "${db.name}"?`)) {
+                return;
+            }
+            try {
+                const response = await fetch(`/api/disconnect/${dbKey}`, { method: 'POST' });
+                const result = await response.json();
+
+                if (result.success) {
+                    // Close modal immediately
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('addConnectionModal'));
+                    if (modal) modal.hide();
+
+                    showMessage('Connection deleted', 'success');
+
+                    // Clear UI if we deleted the active DB
+                    if (currentDatabase === dbKey) {
+                        currentDatabase = null;
+                        document.getElementById('explorerContent').innerHTML =
+                            '<div class="empty-state"><p class="text-muted"><i class="fas fa-arrow-left"></i> Select a database from the left sidebar</p></div>';
+                        document.getElementById('editorContent').innerHTML =
+                            '<div class="welcome-message"><h6>Welcome to Database Monitor</h6><p>Connection removed. Select another database to continue.</p></div>';
+                    }
+                    loadDatabases();
+                } else {
+                    alert(result.error || 'Failed to delete');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Error deleting connection');
+            }
+        };
+    }
+
+    // Set Type (trigger change to render fields)
+    const typeSelect = document.getElementById('databaseType');
+    typeSelect.value = db.engine;
+
+    // Trigger rendering of dynamic fields
+    renderDynamicFields(db.engine);
+
+    // Pre-fill existing fields
+    if (db.fields) {
+        Object.keys(db.fields).forEach(key => {
+            const input = document.getElementById(`field_${key}`);
+            if (input) {
+                // Determine value. If it's a password field, backend sends empty string.
+                // We leave it empty so placeholder can show "Leave blank to keep unchanged"
+                if (input.type === 'password') {
+                     input.placeholder = "Leave blank to keep unchanged";
+                } else {
+                     input.value = db.fields[key] || '';
+                }
+            }
+        });
+    }
+
+    // Populate Extra JSON if available
+    const extraJsonEl = document.getElementById('extraJson');
+    if (extraJsonEl && db.extra_json) {
+         try {
+             // Beautify JSON for editing
+             extraJsonEl.value = JSON.stringify(db.extra_json, null, 2);
+         } catch(e) { /* ignore */ }
+    }
+
+    // I will add a nice message about password.
+    showConnectionMessage('Passwords are hidden. Leave password field blank to keep current password.', 'info');
+
+    addConnectionModal.show();
 }
 
 // Collect the Extra JSON textarea value
@@ -309,6 +502,7 @@ async function testConnection() {
 async function saveConnection() {
     const connectionName = document.getElementById('connectionName').value;
     const connectionType = document.getElementById('databaseType').value;
+    const connectionId = document.getElementById('connectionId').value;
 
     if (!connectionName) {
         showConnectionMessage('Please enter a connection name', 'error');
@@ -322,11 +516,17 @@ async function saveConnection() {
 
     if (!validateExtraJson()) return;
 
+    // Get Group
+    const groupNameEl = document.getElementById('groupName');
+    const groupName = groupNameEl ? groupNameEl.value.trim() : '';
+
     const connectionData = {
         name: connectionName,
         type: connectionType,
         fields: {},
-        extra_json: getExtraJson()
+        extra_json: getExtraJson(),
+        group: groupName,
+        id: connectionId || null
     };
 
     // Collect form data
@@ -334,8 +534,13 @@ async function saveConnection() {
     let isValid = true;
 
     config.fields.forEach(field => {
-        const value = document.getElementById(`field_${field.name}`).value;
-        if (field.required && !value) {
+        const input = document.getElementById(`field_${field.name}`);
+        const value = input.value;
+
+        // Skip validation for password if updating (it might be empty to keep old value)
+        if (connectionId && field.type === 'password' && !value) {
+            // It's allowed to be empty
+        } else if (field.required && !value) {
             showConnectionMessage(`${field.label} is required`, 'error');
             isValid = false;
             return;
@@ -399,9 +604,9 @@ function filterDatabases(searchTerm) {
 
 // Disconnect from Database
 async function disconnectDatabase(dbKey, event) {
-    event.stopPropagation();
+    if (event) event.stopPropagation();
 
-    if (!confirm(`Disconnect from ${databases[dbKey].name}?`)) {
+    if (!confirm(`Are you sure you want to delete the connection "${databases[dbKey].name}"?`)) {
         return;
     }
 
@@ -413,7 +618,7 @@ async function disconnectDatabase(dbKey, event) {
         const result = await response.json();
 
         if (result.success) {
-            showMessage('Connection removed', 'success');
+            showMessage('Connection deleted', 'success');
             if (currentDatabase === dbKey) {
                 currentDatabase = null;
                 document.getElementById('explorerContent').innerHTML =
@@ -445,29 +650,34 @@ async function loadDatabases() {
         renderDatabaseList();
     } catch (error) {
         console.error('Error loading databases:', error);
-        showError('Failed to load databases');
+        // showError('Failed to load databases'); // defined elsewhere?
     }
 }
 
-// Render database list in sidebar
+// Render database list with groups and drag-and-drop
 function renderDatabaseList() {
     const databaseList = document.getElementById('databaseList');
+    if (!databaseList) return;
 
     if (Object.keys(databases).length === 0) {
-        databaseList.innerHTML = '<div class="text-muted">No databases configured</div>';
+        databaseList.innerHTML = '<div class="text-muted p-2">No databases configured</div>';
         return;
     }
 
-    let html = '';
-    Object.keys(databases).forEach(dbKey => {
-        const db = databases[dbKey];
-        const status = db.status;
-        const isOnline = status.connected;
+    // Helper to render a single db item
+    const renderItem = (db) => {
+        const isOnline = db.status && db.status.connected;
         const statusClass = isOnline ? 'online' : 'offline';
+        const isActive = currentDatabase === db.key ? 'active' : '';
 
-        html += `
-            <div class="database-item ${currentDatabase === dbKey ? 'active' : ''}"
-                 onclick="selectDatabase('${dbKey}')">
+        return `
+            <div class="database-item ${isActive}"
+                 draggable="true"
+                 data-db-key="${db.key}"
+                 ondragstart="handleDragStart(event)"
+                 ondragover="handleDragOver(event)"
+                 ondrop="handleDrop(event)"
+                 onclick="selectDatabase('${db.key}')">
                 <div class="database-item-name">
                     <i class="fas fa-database"></i>
                     <span>${db.name}</span>
@@ -475,10 +685,78 @@ function renderDatabaseList() {
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <div class="status-light ${statusClass}" title="${isOnline ? 'Online' : 'Offline'}"></div>
                     <div class="database-item-actions">
-                        <button class="btn btn-sm btn-danger" onclick="disconnectDatabase('${dbKey}', event)" title="Disconnect">
-                            <i class="fas fa-times"></i>
+                        <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); editConnection('${db.key}')" title="Edit">
+                             <i class="fas fa-cog"></i>
                         </button>
                     </div>
+                </div>
+            </div>
+        `;
+    };
+
+    // Group databases
+    const groups = {};
+    const ungrouped = [];
+
+    // First ensure all actual groups exist (even empty ones from folder placeholders)
+    Object.values(databases).forEach(db => {
+        if (db.engine === 'folder') {
+            // It's a placeholder for a group
+            const groupName = db.group || db.name;
+            if (!groups[groupName]) groups[groupName] = [];
+            return;
+        }
+
+        if (db.group) {
+            if (!groups[db.group]) groups[db.group] = [];
+            groups[db.group].push(db);
+        } else {
+            ungrouped.push(db);
+        }
+    });
+
+    // Sort contents
+    const sortFn = (a, b) => (a.order || 0) - (b.order || 0);
+    ungrouped.sort(sortFn);
+    Object.keys(groups).sort().forEach(key => {
+        groups[key].sort(sortFn);
+    });
+
+    let html = '';
+
+    // Always render an "Ungrouped / Root" drop zone at the top
+    html += `
+        <div class="ungrouped-items"
+             style="min-height: ${ungrouped.length === 0 ? '40px' : 'auto'}; border: 1px dashed ${ungrouped.length === 0 ? '#444' : 'transparent'}; border-radius: 4px; margin-bottom: 10px;"
+             ondragover="handleDragOverGroup(event)"
+             ondrop="handleDropOnGroup(event, '')"
+             title="Drag here to move to top level">
+            ${ungrouped.length === 0 && Object.keys(groups).length > 0 ? '<div class="text-muted text-center" style="font-size: 0.8em; padding: 10px;">Root Level (Drop here)</div>' : ''}
+            ${ungrouped.map(renderItem).join('')}
+        </div>
+    `;
+
+    // 1. Render Groups
+    Object.keys(groups).forEach(groupName => {
+        html += `
+            <div class="database-group"
+                 style="position: relative;"
+                 ondragover="handleDragOverGroup(event)"
+                 ondrop="handleDropOnGroup(event, '${groupName}')">
+                <div class="group-header" onclick="toggleGroup(this)" style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center;">
+                        <i class="fas fa-folder-open me-2"></i>
+                        <span>${groupName}</span>
+                    </div>
+                    <button class="btn btn-sm text-danger p-0"
+                            onclick="event.stopPropagation(); deleteFolder('${groupName}')"
+                            title="Delete Folder"
+                            style="padding: 0 4px; font-size: 0.8rem; background: none; border: none;">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+                <div class="group-items">
+                    ${groups[groupName].length === 0 ? '<div class="text-muted text-center" style="font-size: 0.8em; padding: 5px;">Empty Folder</div>' : groups[groupName].map(renderItem).join('')}
                 </div>
             </div>
         `;
@@ -487,11 +765,276 @@ function renderDatabaseList() {
     databaseList.innerHTML = html;
 }
 
+// Delete Folder
+async function deleteFolder(folderName) {
+    if (!confirm(`Delete folder "${folderName}"?\n\nThis will remove the folder but keep all connections (moved to root).`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/delete-folder', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ name: folderName })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showMessage(result.message, 'success');
+            loadDatabases();
+        } else {
+            showMessage(result.error || 'Failed to delete folder', 'danger');
+        }
+    } catch(e) {
+        console.error(e);
+        showMessage('Error deleting folder', 'danger');
+    }
+}
+
+
+
+// --- Backup & Restore ---
+
+window.performBackup = async function() {
+    const pwd = document.getElementById('backupPassword').value;
+    const feedback = document.getElementById('backupMessage');
+
+    if (!pwd) {
+        feedback.className = 'alert alert-danger';
+        feedback.textContent = 'Password is required.';
+        feedback.classList.remove('d-none');
+        return;
+    }
+
+    feedback.className = 'alert alert-info';
+    feedback.textContent = 'Encrypting and generating backup...';
+    feedback.classList.remove('d-none');
+
+    try {
+        const response = await fetch('/api/connections/export', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ password: pwd })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            feedback.className = 'alert alert-success';
+            feedback.textContent = 'Backup created successfully. Downloading...';
+
+            // Trigger download
+            const blob = new Blob([result.data], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = result.filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            // Reset and close
+            setTimeout(() => {
+                document.getElementById('backupPassword').value = '';
+                feedback.classList.add('d-none');
+                bootstrap.Modal.getInstance(document.getElementById('backupModal')).hide();
+            }, 2000);
+        } else {
+            feedback.className = 'alert alert-danger';
+            feedback.textContent = result.error || 'Backup failed.';
+        }
+    } catch (e) {
+        feedback.className = 'alert alert-danger';
+        feedback.textContent = 'Error: ' + e.message;
+    }
+}
+
+window.performRestore = async function() {
+    const fileInput = document.getElementById('restoreFile');
+    const pwd = document.getElementById('restorePassword').value;
+    const feedback = document.getElementById('restoreMessage');
+
+    if (!fileInput.files[0] || !pwd) {
+        feedback.className = 'alert alert-danger';
+        feedback.textContent = 'File and password are required.';
+        feedback.classList.remove('d-none');
+        return;
+    }
+
+    feedback.className = 'alert alert-info';
+    feedback.textContent = 'Decrypting and restoring...';
+    feedback.classList.remove('d-none');
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const content = e.target.result; // This is the text content
+
+        try {
+            const response = await fetch('/api/connections/import', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    password: pwd,
+                    data: content
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                feedback.className = 'alert alert-success';
+                feedback.textContent = result.message;
+
+                setTimeout(() => {
+                   window.location.reload(); // Reload to show new connections
+                }, 1500);
+            } else {
+                feedback.className = 'alert alert-danger';
+                feedback.textContent = result.error || 'Restore failed.';
+            }
+        } catch (err) {
+            feedback.className = 'alert alert-danger';
+            feedback.textContent = 'Error: ' + err.message;
+        }
+    };
+    reader.readAsText(fileInput.files[0]);
+}
+
+
+let draggedDbKey = null;
+
+function handleDragStart(event) {
+    draggedDbKey = event.currentTarget.getAttribute('data-db-key');
+    event.dataTransfer.effectAllowed = 'move';
+    // Transparent image to unclutter view? Default is fine for now.
+}
+
+function handleDragOver(event) {
+    event.preventDefault(); // Necessary to allow dropping
+    event.dataTransfer.dropEffect = 'move';
+    event.currentTarget.classList.add('drag-over');
+}
+
+function handleDragLeave(event) {
+    event.currentTarget.classList.remove('drag-over');
+}
+
+// Drop on another Item -> Reorder
+async function handleDrop(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    const target = event.currentTarget;
+    target.classList.remove('drag-over');
+
+    const targetDbKey = target.getAttribute('data-db-key');
+    if (!draggedDbKey || draggedDbKey === targetDbKey) return;
+
+    // Find both DB objects
+    const draggedDb = databases[draggedDbKey];
+    const targetDb = databases[targetDbKey];
+
+    // Determine new group and order
+    // If dropping on an item, adopt its group and insert before/after
+    // Simple logic: Insert *before* the target
+    const newGroup = targetDb.group || "";
+
+    // We need to recalculate orders for the whole group
+    const siblings = Object.values(databases).filter(d => (d.group || "") === newGroup && d.key !== draggedDbKey);
+    siblings.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    const targetIndex = siblings.findIndex(d => d.key === targetDbKey);
+    // Insert dragged item at target index
+    siblings.splice(targetIndex, 0, draggedDb);
+
+    // Prepare batch update
+    const updates = siblings.map((db, index) => ({
+        key: db.key,
+        group: newGroup,
+        order: index
+    }));
+
+    // Also include the dragged item update (it's in siblings now)
+
+    await saveReorder(updates);
+}
+
+function handleDragOverGroup(event) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+}
+
+// Drop on a Folder Header or Empty Area -> Move to Group
+async function handleDropOnGroup(event, groupName) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!draggedDbKey) return;
+    const db = databases[draggedDbKey];
+
+    // If already in group, do nothing (unless we want to append to end?)
+    if ((db.group || "") === groupName) {
+        return;
+    }
+
+    // Move to end of target group
+    const targetGroupItems = Object.values(databases).filter(d => (d.group || "") === groupName && d.key !== draggedDbKey);
+    const newOrder = targetGroupItems.length;
+
+    const updates = [{
+        key: draggedDbKey,
+        group: groupName,
+        order: newOrder
+    }];
+
+    await saveReorder(updates);
+}
+
+async function saveReorder(updates) {
+    // Optimistic UI update
+    updates.forEach(u => {
+        if (databases[u.key]) {
+            databases[u.key].group = u.group;
+            databases[u.key].order = u.order;
+        }
+    });
+    renderDatabaseList();
+
+    try {
+        await fetch('/api/connections/reorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ updates })
+        });
+    } catch (e) {
+        console.error("Reorder failed", e);
+        // Revert? For now, just log.
+    }
+}
+
+function toggleGroup(header) {
+    const items = header.nextElementSibling;
+    if (items) {
+        items.classList.toggle('hidden');
+        const icon = header.querySelector('i.fa-folder-open, i.fa-folder');
+        if (icon) {
+            icon.classList.toggle('fa-folder-open');
+            icon.classList.toggle('fa-folder');
+        }
+    }
+}
+
 // Update database status
 function updateDatabaseStatus(dbKey, status) {
     if (databases[dbKey]) {
         databases[dbKey].status = status;
-        renderDatabaseList();
+        // Don't re-render whole list to avoid breaking drag state or scroll,
+        // just find the indicator
+        const item = document.querySelector(`.database-item[data-db-key="${dbKey}"] .status-light`);
+        if (item) {
+            item.className = `status-light ${status.connected ? 'online' : 'offline'}`;
+            item.title = status.connected ? 'Online' : 'Offline';
+        }
     }
 }
 
@@ -982,3 +1525,76 @@ function showEditorError(message) {
 
     resizer.addEventListener('mousedown', onMouseDown);
 })();
+
+// ============================================================
+// User Profile & Management
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+    // Password Change
+    const savePasswordBtn = document.getElementById('savePasswordBtn');
+    if (savePasswordBtn) {
+        savePasswordBtn.addEventListener('click', async () => {
+            const current = document.getElementById('currentPassword').value;
+            const newPass = document.getElementById('newPassword').value;
+            const confirm = document.getElementById('confirmNewPassword').value;
+            const msgDiv = document.getElementById('passwordChangeMessage');
+
+            msgDiv.classList.add('d-none');
+            msgDiv.className = 'alert d-none';
+
+            if (newPass !== confirm) {
+                msgDiv.textContent = 'New passwords do not match.';
+                msgDiv.classList.remove('d-none');
+                msgDiv.classList.add('alert-danger');
+                return;
+            }
+
+            try {
+                const button = savePasswordBtn;
+                const originalText = button.innerHTML;
+                button.disabled = true;
+                button.innerHTML = '<i class=\'fas fa-spinner fa-spin\'></i> Saving...';
+
+                const response = await fetch('/api/profile/change-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        old_password: current,
+                        new_password: newPass
+                    })
+                });
+
+                const result = await response.json();
+
+                button.disabled = false;
+                button.innerHTML = originalText;
+
+                if (result.success) {
+                    msgDiv.textContent = result.message;
+                    msgDiv.classList.remove('d-none');
+                    msgDiv.classList.add('alert-success');
+                    document.getElementById('changePasswordForm').reset();
+                    setTimeout(() => {
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('changePasswordModal'));
+                        if (modal) modal.hide();
+                        msgDiv.classList.add('d-none');
+                    }, 1500);
+                } else {
+                    msgDiv.textContent = result.message;
+                    msgDiv.classList.remove('d-none');
+                    msgDiv.classList.add('alert-danger');
+                }
+            } catch (error) {
+                console.error('Error changing password:', error);
+                msgDiv.textContent = 'An error occurred. Please try again.';
+                msgDiv.classList.remove('d-none');
+                msgDiv.classList.add('alert-danger');
+                if (savePasswordBtn) savePasswordBtn.disabled = false;
+            }
+        });
+    }
+
+    // Backup Connections (handled by simple link href, but we can verify)
+    // The link has href='/api/connections/backup' and target='_blank'
+    // so it should work natively without JS.
+});

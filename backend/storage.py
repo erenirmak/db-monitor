@@ -47,7 +47,10 @@ CREATE TABLE IF NOT EXISTS saved_connections (
     file_path_enc   TEXT,
     url_enc         TEXT NOT NULL,
     extra_json_enc  TEXT,
-    created_at      TEXT NOT NULL
+    created_at      TEXT NOT NULL,
+    user_id         TEXT NOT NULL DEFAULT '',
+    group_name      TEXT DEFAULT '',
+    sort_order      INTEGER DEFAULT 0
 )
 """
 
@@ -69,6 +72,19 @@ def init_storage(data_dir: str | Path) -> None:
         except sqlite3.OperationalError:
             pass  # column already exists
 
+        # Migrate: add group_name and sort_order columns
+        try:
+            conn.execute("ALTER TABLE saved_connections ADD COLUMN group_name TEXT DEFAULT ''")
+            print("Migration: added group_name column")
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE saved_connections ADD COLUMN sort_order INTEGER DEFAULT 0")
+            print("Migration: added sort_order column")
+        except sqlite3.OperationalError:
+            pass
+
 
 def _get_conn() -> sqlite3.Connection:
     if _db_path is None:
@@ -89,6 +105,8 @@ def save_connection(
     connection_url: str,
     extra_options: Optional[Dict[str, Any]] = None,
     user_id: str = "",
+    group_name: str = "",
+    sort_order: int = 0,
 ) -> None:
     """Encrypt sensitive fields and insert/replace into SQLite."""
     host_enc = encrypt(fields.get("host", "")) if fields.get("host") else None
@@ -106,8 +124,9 @@ def save_connection(
             INSERT OR REPLACE INTO saved_connections
                 (db_key, user_id, display_name, engine_type,
                  host_enc, port_enc, username_enc, password_enc,
-                 database_enc, file_path_enc, url_enc, extra_json_enc, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 database_enc, file_path_enc, url_enc, extra_json_enc, created_at,
+                 group_name, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 db_key,
@@ -123,6 +142,8 @@ def save_connection(
                 url_enc,
                 extra_enc,
                 datetime.now().isoformat(),
+                group_name,
+                sort_order,
             ),
         )
 
@@ -131,6 +152,32 @@ def delete_connection(db_key: str) -> bool:
     """Remove a saved connection.  Returns True if a row was deleted."""
     with _get_conn() as conn:
         cur = conn.execute("DELETE FROM saved_connections WHERE db_key = ?", (db_key,))
+        return cur.rowcount > 0
+
+
+def update_connection_metadata(
+    db_key: str,
+    group_name: Optional[str] = None,
+    sort_order: Optional[int] = None,
+) -> bool:
+    """Update only metadata fields (group, order) for a connection."""
+    updates = []
+    params = []
+    if group_name is not None:
+        updates.append("group_name = ?")
+        params.append(group_name)
+    if sort_order is not None:
+        updates.append("sort_order = ?")
+        params.append(sort_order)
+
+    if not updates:
+        return False
+
+    params.append(db_key)
+    query = f"UPDATE saved_connections SET {', '.join(updates)} WHERE db_key = ?"
+
+    with _get_conn() as conn:
+        cur = conn.execute(query, params)
         return cur.rowcount > 0
 
 
@@ -192,6 +239,8 @@ def load_all_connections(user_id: str = "") -> List[Dict[str, Any]]:
                 "extra_options": extra or {},
                 "fields": fields,
                 "user_id": row["user_id"] if "user_id" in row.keys() else "",
+                "group_name": row["group_name"] if "group_name" in row.keys() else "",
+                "sort_order": row["sort_order"] if "sort_order" in row.keys() else 0,
             }
         )
 

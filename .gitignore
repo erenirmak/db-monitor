@@ -46,3 +46,4 @@ QUICKSTART.md
 run.py
 config_examples.py
 src/
+*.enc

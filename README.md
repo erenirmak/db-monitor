@@ -17,14 +17,24 @@ A self-hosted Flask web application for monitoring and managing multiple databas
 - Real-time status monitoring with pulsing green / red indicators (every 5 s)
 
 **Multi-User Authentication**
-- Local username + password accounts (PBKDF2-HMAC-SHA256, 260 000 iterations)
+- Local username + password accounts (hashed and salted)
 - Optional LDAP / LLDAP backend (direct-bind or search-bind, group filtering) *(experimental)*
 - Per-user connection isolation — each user sees only their own databases
 
+**Folder Organization**
+- Group related connections into folders (e.g., "Production", "Staging")
+- Drag-and-drop support to move connections between folders
+- Collapsible folder views to keep the sidebar clean
+
+**Secure Backup & Restore**
+- Export all your connections to a password-protected encrypted file (`.enc`)
+- Uses industry-standard AES encryption
+- Safe to store offline or share (only readable with the password)
+
 **Encrypted Persistence**
-- All connection credentials encrypted at rest with Fernet (AES-128-CBC)
+- All connection credentials encrypted at rest with AES-128
 - Encryption key auto-generated on first run and stored in `data/secret.key`
-- User auth stored in a separate `data/auth.db` (passwords are hashed, never encrypted)
+- User auth stored in a separate `data/auth.db`
 
 **Database Explorer**
 - Browse schemas, tables, and views in an expandable tree
@@ -171,7 +181,20 @@ Each connection form also has an **Extra JSON** field for advanced driver config
 - Write your query and click **Execute** (or Ctrl + Enter)
 - Results render in a scrollable table below the editor
 
-### 5. Monitor
+### 5. Organize
+
+- Click the **Folder** icon to create a group
+- Drag and drop connections into folders to organize them
+- Collapse folders to hide less-used connections
+- Delete folders (moves items back to root) with the trash icon
+
+### 6. Backup & Restore
+
+- Click your **Username** (top right) → **Secure Backup**
+- Enter a password to encrypt your file
+- **Restore** using the same password to recover your connections later
+
+### 7. Monitor
 
 - Green pulsing dot = connected
 - Red pulsing dot = connection error
@@ -253,10 +276,10 @@ All API routes require authentication. Unauthenticated requests receive a `401` 
 
 ## Security
 
-- **Credentials at rest** — AES-128-CBC encrypted with auto-generated Fernet key
-- **Passwords** — PBKDF2-HMAC-SHA256 with 260 000 iterations + random 16-byte salt
-- **Session** — server-side Flask session with configurable lifetime
-- **Per-user isolation** — users cannot see or access each other's connections
+- **Credentials at rest** — Encrypted with an auto-generated secret key
+- **Passwords** — Securely hashed and salted
+- **Session** — Server-side limited-lifetime sessions
+- **Data Isolation** — Users can only access their own connections
 - **401 handling** — frontend fetch wrapper auto-redirects to login on session expiry
 
 **Production recommendations:**
@@ -273,12 +296,11 @@ All API routes require authentication. Unauthenticated requests receive a `401` 
 | Package | Purpose |
 |---|---|
 | Flask | Web framework |
-| Flask-SocketIO | Real-time WebSocket communication |
-| SQLAlchemy | Database introspection & query execution |
-| cryptography | Fernet encryption for stored credentials |
+| SQLAlchemy | Data access |
+| cryptography | Encryption |
 | psycopg2-binary | PostgreSQL driver |
 | PyMySQL | MySQL driver |
-| ldap3 *(optional)* | LDAP authentication |
+| ldap3 | LDAP support |
 
 ---
 

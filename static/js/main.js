@@ -76,34 +76,6 @@ const DATABASE_CONFIGS = {
         fields: [
             { name: 'filePath', label: 'File Path', type: 'text', placeholder: './data/database.db', required: true, help: 'Local path to SQLite file' }
         ]
-    },
-    mongodb: {
-        displayName: 'MongoDB',
-        fields: [
-            { name: 'host', label: 'Host', type: 'text', placeholder: 'localhost', required: true },
-            { name: 'port', label: 'Port', type: 'number', placeholder: '27017', required: true, default: 27017 },
-            { name: 'username', label: 'Username', type: 'text', required: false },
-            { name: 'password', label: 'Password', type: 'password', required: false },
-            { name: 'database', label: 'Database Name', type: 'text', required: true }
-        ]
-    },
-    opensearch: {
-        displayName: 'OpenSearch',
-        fields: [
-            { name: 'host', label: 'Host', type: 'text', placeholder: 'localhost', required: true },
-            { name: 'port', label: 'Port', type: 'number', placeholder: '9200', required: true, default: 9200 },
-            { name: 'username', label: 'Username', type: 'text', required: false },
-            { name: 'password', label: 'Password', type: 'password', required: false }
-        ]
-    },
-    elasticsearch: {
-        displayName: 'Elasticsearch',
-        fields: [
-            { name: 'host', label: 'Host', type: 'text', placeholder: 'localhost', required: true },
-            { name: 'port', label: 'Port', type: 'number', placeholder: '9200', required: true, default: 9200 },
-            { name: 'username', label: 'Username', type: 'text', required: false },
-            { name: 'password', label: 'Password', type: 'password', required: false }
-        ]
     }
 };
 

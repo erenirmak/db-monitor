@@ -67,12 +67,13 @@ def build_connection_string(db_type: str, fields: Dict[str, str]) -> Optional[st
 
         if db_type == "mssql":
             port = fields.get("port", "1433")
-            driver = fields.get("driver", "ODBC+Driver+17+for+SQL+Server")
-            return f"mssql+pyodbc://{credentials}{host}:{port}/{database}?driver={driver}"
+            # We now use pymssql by default as it doesn't require ODBC drivers on the host OS
+            return f"mssql+pymssql://{credentials}{host}:{port}/{database}"
 
         if db_type == "oracle":
             port = fields.get("port", "1521")
-            return f"oracle+cx_oracle://{credentials}{host}:{port}/{database}"
+            # We now use the modern thin driver oracledb instead of cx_oracle
+            return f"oracle+oracledb://{credentials}{host}:{port}/{database}"
 
         if db_type == "sqlite":
             file_path = fields.get("filePath", "database.db")

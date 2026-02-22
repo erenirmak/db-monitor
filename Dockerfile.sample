@@ -35,7 +35,5 @@ ENV SECRET_KEY="change-me-in-production" \
 
 EXPOSE 5000
 
-# Run with eventlet for production Socket.IO
-# Install eventlet: add "eventlet>=0.36.0" to pyproject.toml deps
-# or fall back to threading (default)
-CMD ["python", "main.py"]
+# Run with Gunicorn and Eventlet for production Socket.IO
+CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "-b", "0.0.0.0:5000", "wsgi:app"]

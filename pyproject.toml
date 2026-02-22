@@ -13,19 +13,32 @@ dependencies = [
     "psycopg2-binary>=2.9.0",
     "python-engineio>=4.7.0",
     "cryptography>=46.0.4",
+    "gunicorn>=25.1.0",
+    "eventlet>=0.40.4",
+    "python-json-logger>=4.0.0",
+    "opentelemetry-api>=1.39.1",
+    "opentelemetry-sdk>=1.39.1",
+    "opentelemetry-instrumentation-flask>=0.60b1",
+    "opentelemetry-instrumentation-sqlalchemy>=0.60b1",
+    "opentelemetry-exporter-otlp>=1.39.1",
 ]
 
 [dependency-groups]
-lint = [
+dev = [
     "pre-commit>=4.5.1",
-    "ruff>=0.14.10",
+    "pytest>=9.0.2",
+    "ruff>=0.15.0",
 ]
 
 [tool.ruff]
 line-length = 112
+indent-width = 4
+
+[tool.ruff.format]
+indent-style = "space"
 
 [tool.ruff.lint]
-select = ["I"]
+select = ["E", "F", "I", "W"]
 
 [project.optional-dependencies]
 ldap = ["ldap3>=2.9.0"]
@@ -33,5 +46,7 @@ ldap = ["ldap3>=2.9.0"]
 [tool.setuptools]
 py-modules = []
 
-[tool.setuptools.packages.find]
-include = ["backend*"]
+[tool.pytest.ini_options]
+pythonpath = [
+  "."
+]

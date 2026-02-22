@@ -30,7 +30,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from backend.crypto import decrypt, encrypt
+from backend.core.crypto import decrypt, encrypt
 
 _db_path: Path | None = None
 

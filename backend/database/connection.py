@@ -7,13 +7,17 @@ and maintaining runtime state (registry, connection cache, status tracking).
 
 from __future__ import annotations
 
+import logging
 import random
 import string
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
-from sqlalchemy import create_engine, inspect, text
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Runtime stores  (populated from SQLite on startup via load_saved_connections)
@@ -78,8 +82,8 @@ def build_connection_string(db_type: str, fields: Dict[str, str]) -> Optional[st
             return "folder://"
 
         return None  # mongodb, opensearch, elasticsearch, etc.
-    except Exception as exc:
-        print(f"Error building connection string: {exc}")
+    except Exception:
+        logger.error("Error building connection string", exc_info=True)
         return None
 
 
@@ -124,11 +128,37 @@ def _create_engine_from_url(
     # Merge engine-level options (pool_size, pool_pre_ping, …)
     kwargs.update(parsed["engine_kwargs"])
 
-    # Merge connect_args (timeout, sslmode, …)
-    if parsed["connect_args"]:
-        kwargs["connect_args"] = parsed["connect_args"]
+    connect_args = parsed["connect_args"] or {}
 
-    return create_engine(url, **kwargs)
+    # Phase 2: Network Security & TLS Enforcement
+    from backend.core.config import Config
+
+    if Config.ENFORCE_DB_SSL:
+        if "postgresql" in url:
+            if connect_args.get("sslmode", "") not in ["require", "verify-ca", "verify-full"]:
+                connect_args["sslmode"] = "require"
+        elif "mysql" in url and "ssl" not in connect_args:
+            connect_args["ssl"] = {"ssl_mode": "REQUIRED"}
+
+    if Config.SSL_CA_BUNDLE:
+        if "postgresql" in url and "sslrootcert" not in connect_args:
+            connect_args["sslrootcert"] = Config.SSL_CA_BUNDLE
+        elif "mysql" in url:
+            if "ssl" not in connect_args:
+                connect_args["ssl"] = {}
+            if isinstance(connect_args["ssl"], dict) and "ca" not in connect_args["ssl"]:
+                connect_args["ssl"]["ca"] = Config.SSL_CA_BUNDLE
+
+    # Merge connect_args (timeout, sslmode, …)
+    if connect_args:
+        kwargs["connect_args"] = connect_args
+
+    engine = create_engine(url, **kwargs)
+
+    # Instrument the engine for OpenTelemetry
+    SQLAlchemyInstrumentor().instrument(engine=engine)
+
+    return engine
 
 
 # ---------------------------------------------------------------------------
@@ -173,9 +203,9 @@ def get_db_connection(db_key: str) -> Any:
                 use_null_pool=True,
             )
             db_connections[db_key] = engine
-        except Exception as exc:
+        except Exception:
             # Only log errors for real database types, suppress for known virtual types if any
-            print(f"Error creating connection for {db_key}: {exc}")
+            logger.error(f"Error creating connection for {db_key}", exc_info=True)
             return None
     return db_connections[db_key]
 
@@ -217,6 +247,16 @@ def check_db_status(db_key: str) -> bool:
             "error": str(exc),
             "last_check": datetime.now().isoformat(),
         }
+
+        # Remove the cached engine so it gets recreated next time
+        # This helps recover from DNS changes or stale connection pools
+        engine = db_connections.pop(db_key, None)
+        if engine is not None:
+            try:
+                engine.dispose()
+            except Exception:
+                pass
+
         return False
 
 
@@ -258,7 +298,7 @@ def register_connection(
     # Persist to encrypted SQLite storage
     if persist:
         try:
-            from backend.storage import save_connection
+            from backend.database.storage import save_connection
 
             save_connection(
                 db_key=db_key,
@@ -271,8 +311,8 @@ def register_connection(
                 group_name=group_name,
                 sort_order=sort_order,
             )
-        except Exception as exc:
-            print(f"Warning: failed to persist connection {db_key}: {exc}")
+        except Exception:
+            logger.warning(f"Failed to persist connection {db_key}", exc_info=True)
 
     check_db_status(db_key)
     return db_key
@@ -301,11 +341,11 @@ def unregister_connection(db_key: str) -> Optional[str]:
 
     # Remove from encrypted SQLite storage
     try:
-        from backend.storage import delete_connection
+        from backend.database.storage import delete_connection
 
         delete_connection(db_key)
-    except Exception as exc:
-        print(f"Warning: failed to delete persisted connection {db_key}: {exc}")
+    except Exception:
+        logger.warning(f"Failed to delete persisted connection {db_key}", exc_info=True)
 
     return name
 
@@ -317,7 +357,7 @@ def load_saved_connections(user_id: str = "") -> int:
 
     Returns the number of connections loaded.
     """
-    from backend.storage import load_all_connections
+    from backend.database.storage import load_all_connections
 
     rows = load_all_connections(user_id=user_id)
     count = 0
@@ -341,21 +381,32 @@ def load_saved_connections(user_id: str = "") -> int:
         count += 1
 
     if count:
-        print(f"Loaded/Updated {count} saved connection(s) for user '{user_id}'.")
+        logger.info(f"Loaded/Updated {count} saved connection(s) for user '{user_id}'.")
     return count
 
 
 def get_user_databases(user_id: str) -> Dict[str, Dict[str, Any]]:
-    """Return only the DATABASES entries belonging to *user_id*."""
-    return {k: v for k, v in DATABASES.items() if v.get("user_id", "") == user_id}
+    """Return only the DATABASES entries belonging to *user_id* or granted to them."""
+    from backend.auth import get_user_grants
+
+    grants = get_user_grants(user_id)
+    granted_db_keys = [g["db_key"] for g in grants]
+
+    return {k: v for k, v in DATABASES.items() if v.get("user_id", "") == user_id or k in granted_db_keys}
 
 
 def user_owns_db(user_id: str, db_key: str) -> bool:
-    """Check if a db_key belongs to the given user."""
+    """Check if a db_key belongs to the given user or is granted to them."""
     entry = DATABASES.get(db_key)
     if entry is None:
         return False
-    return entry.get("user_id", "") == user_id
+    if entry.get("user_id", "") == user_id:
+        return True
+
+    from backend.auth import get_user_grants
+
+    grants = get_user_grants(user_id)
+    return any(g["db_key"] == db_key for g in grants)
 
 
 def update_db_metadata(db_key: str, group_name: Optional[str] = None, sort_order: Optional[int] = None) -> bool:
@@ -371,9 +422,9 @@ def update_db_metadata(db_key: str, group_name: Optional[str] = None, sort_order
 
     # Update persistence
     try:
-        from backend.storage import update_connection_metadata
+        from backend.database.storage import update_connection_metadata
 
         return update_connection_metadata(db_key, group_name, sort_order)
-    except Exception as exc:
-        print(f"Warning: failed to persist metadata update for {db_key}: {exc}")
+    except Exception:
+        logger.warning(f"Failed to persist metadata update for {db_key}", exc_info=True)
         return False

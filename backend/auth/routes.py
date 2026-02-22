@@ -8,6 +8,7 @@ from backend.auth import (
     authenticate,
     create_user,
 )
+from backend.core.audit import log_audit_event
 
 auth_bp = Blueprint("auth_views", __name__)
 
@@ -35,11 +36,26 @@ def login():
             session["authenticated"] = True
             session["user_id"] = username.lower()
 
-            from backend.connection import load_saved_connections
+            from backend.database.connection import load_saved_connections
 
             load_saved_connections(user_id=username.lower())
 
+            log_audit_event(
+                action="login",
+                user_id=username.lower(),
+                resource_type="system",
+                details={"auth_mode": AUTH_MODE},
+            )
+
             return redirect(url_for("views.index"))
+
+        log_audit_event(
+            action="failed_login",
+            user_id=username.lower(),
+            resource_type="system",
+            status="failure",
+            details={"reason": msg, "auth_mode": AUTH_MODE},
+        )
         error = msg
 
     return render_template(
@@ -86,5 +102,8 @@ def register():
 @auth_bp.route("/logout")
 def logout():
     """Clear the session and redirect to login."""
+    user_id = session.get("user_id")
+    if user_id:
+        log_audit_event(action="logout", user_id=user_id, resource_type="system")
     session.clear()
     return redirect(url_for("auth_views.login"))

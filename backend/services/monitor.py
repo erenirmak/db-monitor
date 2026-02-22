@@ -2,10 +2,25 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 
-from backend.connection import DATABASES, check_db_status, db_status
+from backend.core.telemetry import get_meter
+from backend.database.connection import DATABASES, check_db_status
+
+logger = logging.getLogger(__name__)
+
+# OpenTelemetry Metrics
+meter = get_meter()
+db_ping_counter = meter.create_counter(
+    "db_monitor.ping.count",
+    description="Number of database pings performed",
+)
+db_failure_counter = meter.create_counter(
+    "db_monitor.ping.failures",
+    description="Number of database ping failures",
+)
 
 
 def monitor_databases(app, socketio, interval: int = 5) -> None:
@@ -19,10 +34,18 @@ def monitor_databases(app, socketio, interval: int = 5) -> None:
     while True:
         try:
             for db_key in list(DATABASES.keys()):
-                check_db_status(db_key)
+                is_up = check_db_status(db_key)
+
+                # Record metrics
+                db_type = DATABASES[db_key].get("engine", "unknown")
+                labels = {"db_key": db_key, "db_type": db_type}
+                db_ping_counter.add(1, labels)
+                if not is_up:
+                    db_failure_counter.add(1, labels)
+
             time.sleep(interval)
-        except Exception as exc:
-            print(f"Error in monitor_databases: {exc}")
+        except Exception:
+            logger.error("Error in monitor_databases", exc_info=True)
             time.sleep(interval)
 
 

@@ -1,13 +1,23 @@
 // Initialize Socket.IO connection
 const socket = io();
 
-// Global 401 handler — redirect to login if session expired
+// Global 401/403 handler — redirect to login if session expired, show error if forbidden
 const _originalFetch = window.fetch;
 window.fetch = async function (...args) {
     const response = await _originalFetch.apply(this, args);
     if (response.status === 401) {
         window.location.href = '/login';
         throw new Error('Session expired — redirecting to login');
+    }
+    if (response.status === 403) {
+        try {
+            const data = await response.clone().json();
+            if (data.error) {
+                showMessage(data.error, 'danger');
+            }
+        } catch (e) {
+            showMessage('Access denied (403 Forbidden)', 'danger');
+        }
     }
     return response;
 };
@@ -98,9 +108,20 @@ const DATABASE_CONFIGS = {
 };
 
 // Socket.IO Events
+window.onlineUsers = [];
+
 socket.on('connect', function() {
     console.log('Connected to server');
     loadDatabases();
+});
+
+socket.on('online_users_update', function(data) {
+    window.onlineUsers = data.online_users || [];
+    // If the user management modal is open, re-render the table to show online status
+    const userManagementModal = document.getElementById('userManagementModal');
+    if (userManagementModal && userManagementModal.classList.contains('show')) {
+        loadUsers();
+    }
 });
 
 socket.on('db_status_update', function(data) {
@@ -206,33 +227,37 @@ function initializeEventHandlers() {
     }
 
     // Add Connection Button
-    addConnectionBtn.addEventListener('click', function() {
-        addConnectionModal = new bootstrap.Modal(document.getElementById('addConnectionModal'));
-        resetConnectionForm();
-        addConnectionModal.show();
-    });
+    if (addConnectionBtn) {
+        addConnectionBtn.addEventListener('click', function() {
+            addConnectionModal = new bootstrap.Modal(document.getElementById('addConnectionModal'));
+            resetConnectionForm();
+            addConnectionModal.show();
+        });
+    }
 
     // Add Folder Button
-    addFolderBtn.addEventListener('click', async function() {
-        const folderName = prompt("Enter folder name:");
-        if (folderName && folderName.trim()) {
-            // We create a "placeholder" connection for the folder
-            // This is a bit of a hack: an empty folder is just a connection with type 'folder'
-            try {
-                await fetch('/api/save-connection', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: folderName.trim(),
-                        type: 'folder',
-                        fields: {},
-                        group: folderName.trim()
-                    })
-                });
-                loadDatabases();
-            } catch(e) { console.error(e); }
-        }
-    });
+    if (addFolderBtn) {
+        addFolderBtn.addEventListener('click', async function() {
+            const folderName = prompt("Enter folder name:");
+            if (folderName && folderName.trim()) {
+                // We create a "placeholder" connection for the folder
+                // This is a bit of a hack: an empty folder is just a connection with type 'folder'
+                try {
+                    await fetch('/api/save-connection', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: folderName.trim(),
+                            type: 'folder',
+                            fields: {},
+                            group: folderName.trim()
+                        })
+                    });
+                    loadDatabases();
+                } catch(e) { console.error(e); }
+            }
+        });
+    }
 
     // Refresh Button
     refreshBtn.addEventListener('click', function() {
@@ -271,7 +296,12 @@ function initializeEventHandlers() {
     testConnectionBtn.addEventListener('click', testConnection);
 
     // Save Connection Button
-    saveConnectionBtn.addEventListener('click', saveConnection);
+    if (window.USER_PERMISSIONS.includes('manage_connections')) {
+        saveConnectionBtn.addEventListener('click', saveConnection);
+    } else {
+        saveConnectionBtn.style.display = 'none';
+        testConnectionBtn.style.display = 'none';
+    }
 }
 
 // Render Dynamic Form Fields Based on Database Type
@@ -350,7 +380,8 @@ function editConnection(dbKey) {
     // Show delete button
     const deleteBtn = document.getElementById('deleteConnectionBtn');
     if (deleteBtn) {
-        deleteBtn.style.display = 'inline-block';
+        const canEdit = window.USER_PERMISSIONS.includes('manage_connections');
+        deleteBtn.style.display = canEdit ? 'inline-block' : 'none';
         deleteBtn.onclick = async function() {
             if (!confirm(`Are you sure you want to delete the connection "${db.name}"?`)) {
                 return;
@@ -647,6 +678,13 @@ async function loadDatabases() {
             databases[db.key] = db;
         });
 
+        // Populate grant database dropdown
+        const grantDbSelect = document.getElementById('grantDbKey');
+        if (grantDbSelect) {
+            grantDbSelect.innerHTML = '<option value="" disabled selected>Select Database</option>' +
+                databasesList.map(db => `<option value="${db.key}">${db.name} (${db.key})</option>`).join('');
+        }
+
         renderDatabaseList();
     } catch (error) {
         console.error('Error loading databases:', error);
@@ -670,6 +708,13 @@ function renderDatabaseList() {
         const statusClass = isOnline ? 'online' : 'offline';
         const isActive = currentDatabase === db.key ? 'active' : '';
 
+        const canEdit = window.USER_PERMISSIONS.includes('manage_connections');
+        const editButton = canEdit ? `
+            <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); editConnection('${db.key}')" title="Edit">
+                 <i class="fas fa-cog"></i>
+            </button>
+        ` : '';
+
         return `
             <div class="database-item ${isActive}"
                  draggable="true"
@@ -685,9 +730,7 @@ function renderDatabaseList() {
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <div class="status-light ${statusClass}" title="${isOnline ? 'Online' : 'Offline'}"></div>
                     <div class="database-item-actions">
-                        <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); editConnection('${db.key}')" title="Edit">
-                             <i class="fas fa-cog"></i>
-                        </button>
+                        ${editButton}
                     </div>
                 </div>
             </div>
@@ -738,22 +781,27 @@ function renderDatabaseList() {
 
     // 1. Render Groups
     Object.keys(groups).forEach(groupName => {
+        const canEdit = window.USER_PERMISSIONS.includes('manage_connections');
+        const deleteFolderBtn = canEdit ? `
+            <button class="btn btn-sm text-danger p-0"
+                    onclick="deleteFolder('${groupName}')"
+                    title="Delete Folder"
+                    style="padding: 0 4px; font-size: 0.8rem; background: none; border: none; z-index: 10;">
+                <i class="fas fa-trash"></i>
+            </button>
+        ` : '';
+
         html += `
             <div class="database-group"
                  style="position: relative;"
                  ondragover="handleDragOverGroup(event)"
                  ondrop="handleDropOnGroup(event, '${groupName}')">
-                <div class="group-header" onclick="toggleGroup(this)" style="display: flex; align-items: center; justify-content: space-between;">
-                    <div style="display: flex; align-items: center;">
+                <div class="group-header" style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; cursor: pointer; flex-grow: 1;" onclick="toggleGroup(this.parentElement)">
                         <i class="fas fa-folder-open me-2"></i>
                         <span>${groupName}</span>
                     </div>
-                    <button class="btn btn-sm text-danger p-0"
-                            onclick="event.stopPropagation(); deleteFolder('${groupName}')"
-                            title="Delete Folder"
-                            style="padding: 0 4px; font-size: 0.8rem; background: none; border: none;">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    ${deleteFolderBtn}
                 </div>
                 <div class="group-items">
                     ${groups[groupName].length === 0 ? '<div class="text-muted text-center" style="font-size: 0.8em; padding: 5px;">Empty Folder</div>' : groups[groupName].map(renderItem).join('')}
@@ -1597,4 +1645,361 @@ document.addEventListener('DOMContentLoaded', () => {
     // Backup Connections (handled by simple link href, but we can verify)
     // The link has href='/api/connections/backup' and target='_blank'
     // so it should work natively without JS.
+
+    // User Management Logic
+    if (window.USER_PERMISSIONS.includes('manage_users')) {
+        const userManagementModal = document.getElementById('userManagementModal');
+        if (userManagementModal) {
+            userManagementModal.addEventListener('show.bs.modal', () => {
+                loadRoles().then(() => {
+                    loadUsers();
+                    loadGrants();
+                });
+            });
+        }
+
+        // Users Tab
+        const btnShowAddUserForm = document.getElementById('btnShowAddUserForm');
+        const addUserFormContainer = document.getElementById('addUserFormContainer');
+        if (btnShowAddUserForm && addUserFormContainer) {
+            btnShowAddUserForm.addEventListener('click', () => {
+                addUserFormContainer.classList.toggle('d-none');
+            });
+        }
+
+        const addUserForm = document.getElementById('addUserForm');
+        if (addUserForm) {
+            addUserForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const username = document.getElementById('newUsername').value;
+                const password = document.getElementById('newUserPassword').value;
+                const role = document.getElementById('newUserRole').value;
+
+                try {
+                    const response = await fetch('/api/users', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password, role })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        showMessage(result.message, 'success');
+                        addUserForm.reset();
+                        addUserFormContainer.classList.add('d-none');
+                        loadUsers();
+                    } else {
+                        showMessage(result.error || 'Failed to create user', 'danger');
+                    }
+                } catch (error) {
+                    console.error('Error creating user:', error);
+                    showMessage('Error creating user', 'danger');
+                }
+            });
+        }
+
+        // Roles Tab
+        const btnShowAddRoleForm = document.getElementById('btnShowAddRoleForm');
+        const addRoleFormContainer = document.getElementById('addRoleFormContainer');
+        if (btnShowAddRoleForm && addRoleFormContainer) {
+            btnShowAddRoleForm.addEventListener('click', () => {
+                addRoleFormContainer.classList.toggle('d-none');
+            });
+        }
+
+        const addRoleForm = document.getElementById('addRoleForm');
+        if (addRoleForm) {
+            addRoleForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const name = document.getElementById('newRoleName').value;
+                const permissions = Array.from(document.querySelectorAll('.perm-checkbox:checked')).map(cb => cb.value);
+
+                try {
+                    const response = await fetch('/api/roles', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, permissions, description: 'Custom role' })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        showMessage(result.message, 'success');
+                        addRoleForm.reset();
+                        addRoleFormContainer.classList.add('d-none');
+                        loadRoles();
+                    } else {
+                        showMessage(result.error || 'Failed to create role', 'danger');
+                    }
+                } catch (error) {
+                    console.error('Error creating role:', error);
+                    showMessage('Error creating role', 'danger');
+                }
+            });
+        }
+
+        // Grants Tab
+        const btnShowAddGrantForm = document.getElementById('btnShowAddGrantForm');
+        const addGrantFormContainer = document.getElementById('addGrantFormContainer');
+        if (btnShowAddGrantForm && addGrantFormContainer) {
+            btnShowAddGrantForm.addEventListener('click', () => {
+                addGrantFormContainer.classList.toggle('d-none');
+            });
+        }
+
+        const addGrantForm = document.getElementById('addGrantForm');
+        if (addGrantForm) {
+            addGrantForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const username = document.getElementById('grantUsername').value;
+                const db_key = document.getElementById('grantDbKey').value;
+                const role = document.getElementById('grantRole').value;
+
+                try {
+                    const response = await fetch('/api/grants', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, db_key, role })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        showMessage(result.message, 'success');
+                        addGrantForm.reset();
+                        addGrantFormContainer.classList.add('d-none');
+                        loadGrants();
+                    } else {
+                        showMessage(result.error || 'Failed to create grant', 'danger');
+                    }
+                } catch (error) {
+                    console.error('Error creating grant:', error);
+                    showMessage('Error creating grant', 'danger');
+                }
+            });
+        }
+    }
 });
+
+let systemRoles = [];
+
+async function loadRoles() {
+    try {
+        const response = await fetch('/api/roles');
+        const result = await response.json();
+        const tbody = document.getElementById('rolesTableBody');
+        if (!tbody) return;
+
+        systemRoles = result.roles || [];
+        tbody.innerHTML = '';
+
+        // Update role dropdowns
+        const roleSelects = [document.getElementById('newUserRole'), document.getElementById('grantRole')];
+        const roleOptions = systemRoles.map(r => `<option value="${r.name}">${r.name}</option>`).join('');
+        roleSelects.forEach(select => {
+            if (select) select.innerHTML = roleOptions;
+        });
+
+        if (systemRoles.length > 0) {
+            systemRoles.forEach(role => {
+                const perms = role.permissions.map(p => `<span class="badge bg-info text-dark me-1">${p}</span>`).join('');
+                const deleteBtn = role.is_system ?
+                    `<button class="btn btn-sm btn-outline-secondary" disabled title="System Role"><i class="fas fa-lock"></i></button>` :
+                    `<button class="btn btn-sm btn-outline-danger" onclick="deleteRole('${role.name}')" title="Delete Role"><i class="fas fa-trash"></i></button>`;
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${role.name}</strong> ${role.is_system ? '<span class="badge bg-secondary">System</span>' : ''}</td>
+                        <td>${perms}</td>
+                        <td class="text-end">${deleteBtn}</td>
+                    </tr>
+                `;
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No roles found</td></tr>';
+        }
+    } catch (error) {
+        console.error('Error loading roles:', error);
+    }
+}
+
+async function deleteRole(name) {
+    if (!confirm(`Are you sure you want to delete role "${name}"?`)) return;
+    try {
+        const response = await fetch(`/api/roles/${name}`, { method: 'DELETE' });
+        const result = await response.json();
+        if (result.success) {
+            showMessage(result.message, 'success');
+            loadRoles();
+        } else {
+            showMessage(result.error || 'Failed to delete role', 'danger');
+        }
+    } catch (error) {
+        console.error('Error deleting role:', error);
+    }
+}
+
+async function loadGrants() {
+    try {
+        const response = await fetch('/api/grants');
+        const result = await response.json();
+        const tbody = document.getElementById('grantsTableBody');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+        if (result.grants && result.grants.length > 0) {
+            result.grants.forEach(grant => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${grant.username}</strong></td>
+                        <td><code>${grant.db_key}</code></td>
+                        <td><span class="badge bg-primary">${grant.role}</span></td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteGrant('${grant.username}', '${grant.db_key}')" title="Revoke Access">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No database grants found</td></tr>';
+        }
+    } catch (error) {
+        console.error('Error loading grants:', error);
+    }
+}
+
+async function deleteGrant(username, db_key) {
+    if (!confirm(`Revoke access to ${db_key} for user ${username}?`)) return;
+    try {
+        const response = await fetch(`/api/grants/${username}/${db_key}`, { method: 'DELETE' });
+        const result = await response.json();
+        if (result.success) {
+            showMessage(result.message, 'success');
+            loadGrants();
+        } else {
+            showMessage(result.error || 'Failed to revoke grant', 'danger');
+        }
+    } catch (error) {
+        console.error('Error revoking grant:', error);
+    }
+}
+
+async function loadUsers() {
+    try {
+        const response = await fetch('/api/users');
+        const result = await response.json();
+        const tbody = document.getElementById('usersTableBody');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+        if (result.users && result.users.length > 0) {
+            // Populate grant user dropdown
+            const grantUserSelect = document.getElementById('grantUsername');
+            if (grantUserSelect) {
+                grantUserSelect.innerHTML = '<option value="" disabled selected>Select User</option>' +
+                    result.users.map(u => `<option value="${u.username}">${u.username}</option>`).join('');
+            }
+
+            result.users.forEach(user => {
+                const date = new Date(user.created_at).toLocaleString();
+                const roleBadgeClass = user.role === 'admin' ? 'bg-danger' : (user.role === 'editor' ? 'bg-warning text-dark' : 'bg-secondary');
+                const isOnline = window.onlineUsers.includes(user.username);
+                const onlineIndicator = isOnline ? '<span class="status-light online d-inline-block ms-2" title="Online"></span>' : '<span class="status-light offline d-inline-block ms-2" title="Offline"></span>';
+
+                const roleOptions = systemRoles.map(r =>
+                    `<option value="${r.name}" ${user.role === r.name ? 'selected' : ''}>${r.name}</option>`
+                ).join('');
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${user.username}</strong>${onlineIndicator}</td>
+                        <td>
+                            <select class="form-select form-select-sm w-auto d-inline-block" onchange="updateUserRole('${user.username}', this.value)" ${user.username === 'admin' ? 'disabled' : ''}>
+                                ${roleOptions}
+                            </select>
+                        </td>
+                        <td><small class="text-muted">${date}</small></td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="resetUserPassword('${user.username}')" title="Reset Password">
+                                <i class="fas fa-key"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${user.username}')" title="Delete User" ${user.username === 'admin' ? 'disabled' : ''}>
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No users found</td></tr>';
+        }
+    } catch (error) {
+        console.error('Error loading users:', error);
+    }
+}
+
+async function updateUserRole(username, newRole) {
+    try {
+        const response = await fetch(`/api/users/${username}/role`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: newRole })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showMessage(result.message, 'success');
+        } else {
+            showMessage(result.error || 'Failed to update role', 'danger');
+            loadUsers(); // reload to revert select
+        }
+    } catch (error) {
+        console.error('Error updating role:', error);
+        showMessage('Error updating role', 'danger');
+        loadUsers();
+    }
+}
+
+async function resetUserPassword(username) {
+    const newPassword = prompt(`Enter new password for user "${username}":`);
+    if (!newPassword) return;
+    if (newPassword.length < 4) {
+        alert('Password must be at least 4 characters.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/users/${username}/password`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: newPassword })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showMessage(result.message, 'success');
+        } else {
+            showMessage(result.error || 'Failed to reset password', 'danger');
+        }
+    } catch (error) {
+        console.error('Error resetting password:', error);
+        showMessage('Error resetting password', 'danger');
+    }
+}
+
+async function deleteUser(username) {
+    if (!confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/users/${username}`, {
+            method: 'DELETE'
+        });
+        const result = await response.json();
+        if (result.success) {
+            showMessage(result.message, 'success');
+            loadUsers();
+        } else {
+            showMessage(result.error || 'Failed to delete user', 'danger');
+        }
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        showMessage('Error deleting user', 'danger');
+    }
+}

@@ -11,7 +11,7 @@ def create_app() -> Flask:
         template_folder="../templates",
         static_folder="../static",
     )
-    app.config.from_object("backend.config.Config")
+    app.config.from_object("backend.core.config.Config")
 
     # Initialize extensions
     socketio.init_app(app, cors_allowed_origins="*")
@@ -20,13 +20,21 @@ def create_app() -> Flask:
     from datetime import timedelta
 
     from backend.auth import init_auth
-    from backend.config import Config as _cfg
-    from backend.crypto import init_crypto
-    from backend.storage import init_storage
+    from backend.core.config import Config as _cfg
+    from backend.core.crypto import init_crypto
+    from backend.core.telemetry import init_telemetry
+    from backend.database.storage import init_storage
 
+    init_telemetry()
     init_crypto(_cfg.DATA_DIR)
     init_storage(_cfg.DATA_DIR)
     init_auth(_cfg.DATA_DIR)
+
+    # Instrument Flask app for OpenTelemetry
+    from opentelemetry.instrumentation.flask import FlaskInstrumentor
+
+    FlaskInstrumentor().instrument_app(app)
+
     # Connections are loaded per-user on login — no global load_saved_connections().
 
     # Make sessions permanent so the cookie survives browser restarts
@@ -34,11 +42,11 @@ def create_app() -> Flask:
     # -----------------------------------------------------------------
 
     # Register blueprints
-    from backend.routes import register_blueprints
+    from backend.web.routes import register_blueprints
 
     register_blueprints(app)
 
     # Register SocketIO handlers
-    from backend import sockets  # noqa: F401
+    from backend.web import sockets  # noqa: F401
 
     return app

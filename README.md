@@ -16,10 +16,12 @@ A self-hosted Flask web application for monitoring and managing multiple databas
 - Add / remove connections from the browser — no config files to edit
 - Real-time status monitoring with pulsing green / red indicators (every 5 s)
 
-**Multi-User Authentication**
+**Multi-User Authentication & RBAC**
 - Local username + password accounts (hashed and salted)
 - Optional LDAP / LLDAP backend (direct-bind or search-bind, group filtering) *(experimental)*
-- Per-user connection isolation — each user sees only their own databases
+- Role-Based Access Control (RBAC) with atomic permissions (`api_access`, `execute_sql_read`, `execute_sql_write`, `execute_sql_ddl`, `manage_users`, `manage_roles`, `manage_connections`)
+- Database-specific grants (assign users specific roles on specific databases)
+- Per-user connection isolation — each user sees only their own databases unless granted access
 
 **Folder Organization**
 - Group related connections into folders (e.g., "Production", "Staging")
@@ -55,7 +57,7 @@ A self-hosted Flask web application for monitoring and managing multiple databas
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip
 
 ### Install & Run
@@ -202,81 +204,56 @@ Each connection form also has an **Extra JSON** field for advanced driver config
 
 ---
 
-## Application Layout
 
-```
-┌──────────────────────────────────────────────────────────┐
-│ Databases        │ Explorer          │ SQL Editor         │
-│                  │                   │                    │
-│  + Add   ⎋ Out  │ ▸ public          │ SELECT * FROM ...  │
-│                  │   ├─ users        │                    │
-│  my-pg   🟢     │   ├─ orders       │ ┌──────────────┐   │
-│  my-mysql 🔴    │   └─ products     │ │ result table  │   │
-│  my-sqlite 🟢   │ ▸ information_    │ │ ...           │   │
-│                  │   schema          │ └──────────────┘   │
-│                  │       ◂ drag ▸    │                    │
-└──────────────────────────────────────────────────────────┘
-```
-
----
-
-## Project Structure
-
-```
-db-monitor/
-├── main.py                    # Entry point (17 lines)
-├── pyproject.toml             # Dependencies & metadata
-├── Dockerfile.sample          # Docker build template
-├── docker-compose.yml.sample  # Compose deployment template
-├── README.md
-├── backend/
-│   ├── __init__.py            # App factory (create_app)
-│   ├── config.py              # Config class & env vars
-│   ├── auth.py                # Multi-user auth (local + LDAP)
-│   ├── connection.py          # Connection registry & per-user scoping
-│   ├── crypto.py              # Fernet encrypt / decrypt helpers
-│   ├── storage.py             # Encrypted SQLite persistence
-│   ├── monitor.py             # Background status-check thread
-│   ├── sockets.py             # Socket.IO event handlers
-│   └── routes/
-│       ├── __init__.py        # Blueprint registration
-│       ├── api.py             # REST API endpoints
-│       ├── auth_routes.py     # /login, /register, /logout
-│       └── views.py           # HTML page routes
-├── templates/
-│   ├── index.html             # Main dashboard
-│   ├── login.html             # Sign-in page
-│   └── register.html          # Account creation page
-├── static/
-│   ├── css/style.css          # Flexbox layout, resizer, animations
-│   └── js/main.js             # Frontend logic, fetch wrapper, Socket.IO
-└── data/                      # Created at runtime
-    ├── secret.key             # Fernet encryption key (auto-generated)
-    ├── connections.db          # Encrypted connection credentials
-    └── auth.db                # User accounts (hashed passwords)
-```
-
----
 
 ## API Reference
 
 All API routes require authentication. Unauthenticated requests receive a `401` response.
 
+### Database Management
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/databases` | List current user's databases with status |
+| `POST` | `/api/save-connection` | Save a new database connection |
+| `POST` | `/api/disconnect/<key>` | Remove a database connection |
+| `POST` | `/api/test-connection` | Test a database connection |
+| `POST` | `/api/reorder-databases` | Update group and order for a batch of connections |
+| `POST` | `/api/delete-folder` | Delete a folder and ungroup its contents |
+| `POST` | `/api/connections/export` | Export encrypted connections |
+| `POST` | `/api/connections/import` | Import encrypted connections |
+
+### Introspection & Querying
+| Method | Endpoint | Description |
+|---|---|---|
 | `GET` | `/api/database/<key>/schemas` | List schemas in a database |
 | `GET` | `/api/database/<key>/schema/<schema>/tables` | List tables and views |
 | `GET` | `/api/database/<key>/schema/<schema>/table/<table>` | Column info + first 100 rows |
 | `POST` | `/api/database/<key>/execute` | Execute a SQL query (`{"sql": "..."}`) |
-| `POST` | `/api/save-connection` | Save a new database connection |
-| `DELETE` | `/api/disconnect/<key>` | Remove a database connection |
+
+### User Management (Admin Only)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/users` | List all users |
+| `POST` | `/api/users` | Create a new user |
+| `PUT` | `/api/users/<username>/role` | Update a user's role |
+| `PUT` | `/api/users/<username>/password` | Reset a user's password |
+| `DELETE` | `/api/users/<username>` | Delete a user |
+
+### Role & Grant Management (Admin Only)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/roles` | List all roles |
+| `POST` | `/api/roles` | Create a new role |
+| `DELETE` | `/api/roles/<name>` | Delete a role |
+| `GET` | `/api/grants` | List all database grants |
+| `POST` | `/api/grants` | Create a new database grant |
+| `DELETE` | `/api/grants/<username>/<db_key>` | Delete a database grant |
 
 ---
 
 ## Security
 
-- **Credentials at rest** — Encrypted with an auto-generated secret key
+- **Credentials at rest** — Encrypted with an auto-generated or read from environment secret key
 - **Passwords** — Securely hashed and salted
 - **Session** — Server-side limited-lifetime sessions
 - **Data Isolation** — Users can only access their own connections

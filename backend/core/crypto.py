@@ -24,10 +24,18 @@ def init_crypto(data_dir: str | Path) -> None:
     """
     Initialise the module-level Fernet cipher.
 
+    * If ``ENCRYPTION_KEY`` environment variable is set, uses it (Enterprise mode).
     * If ``<data_dir>/secret.key`` exists, loads the key from it.
     * Otherwise generates a new key and writes it to that file.
     """
     global _fernet, _key_path
+
+    # Phase 1: External Secrets Management
+    from backend.core.config import Config
+
+    if Config.ENCRYPTION_KEY:
+        _fernet = Fernet(Config.ENCRYPTION_KEY.encode("ascii"))
+        return
 
     data_dir = Path(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)

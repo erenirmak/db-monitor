@@ -154,11 +154,14 @@ def _create_engine_from_url(
     if connect_args:
         kwargs["connect_args"] = connect_args
 
-    # Ensure psycopg3 is used for PostgreSQL
+    # Ensure psycopg3 is used for PostgreSQL - backup import path and backwards compatibility layer
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+psycopg://", 1)
     elif url.startswith("postgresql+psycopg2://"):
         url = url.replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
+
+    # Set AUTOCOMMIT isolation level for all engines
+    kwargs["isolation_level"] = "AUTOCOMMIT"
 
     engine = create_engine(url, **kwargs)
 

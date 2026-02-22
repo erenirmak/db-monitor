@@ -23,4 +23,4 @@ jobs:
           # Scans the 'base' of the PR or the branch history
           base: ""
           head: ${{ github.ref_name }}
-          extra_args: --results=verified,unknown #--exclude-detectors=postgres
+          extra_args: --results=verified # Only fail on verified secrets

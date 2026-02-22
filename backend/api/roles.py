@@ -28,7 +28,7 @@ def api_create_role():
     permissions = data.get("permissions", [])
     description = data.get("description", "")
 
-    ok, msg = create_role(name, permissions, description)
+    ok, msg = create_role(name, description, permissions)
     if not ok:
         return jsonify({"success": False, "error": msg}), 400
     return jsonify({"success": True, "message": msg})

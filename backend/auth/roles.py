@@ -45,6 +45,7 @@ class RoleManager:
                     "INSERT INTO roles (name, description, permissions, is_system) VALUES (?, ?, ?, 0)",
                     (name, description, json.dumps(permissions)),
                 )
+                conn.commit()
                 return True, "Role created successfully"
             except Exception as e:
                 return False, str(e)
@@ -62,6 +63,7 @@ class RoleManager:
                 "UPDATE roles SET description = ?, permissions = ? WHERE name = ?",
                 (description, json.dumps(permissions), name),
             )
+            conn.commit()
             return True
 
     @staticmethod
@@ -85,4 +87,5 @@ class RoleManager:
                 return False, "Cannot delete role in use"
 
             conn.execute("DELETE FROM roles WHERE name = ?", (name,))
+            conn.commit()
             return True, "Role deleted successfully"

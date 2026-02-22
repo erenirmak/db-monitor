@@ -35,7 +35,9 @@ class Config:
     ENFORCE_DB_SSL = os.environ.get("ENFORCE_DB_SSL", "false").lower() == "true"
 
     # Phase 3: Scalability & High Availability
-    CONTROL_PLANE_DB_URI = os.environ.get("CONTROL_PLANE_DB_URI")  # e.g., postgresql://user:pass@host/db
+    CONTROL_PLANE_DB_URI = os.environ.get(
+        "CONTROL_PLANE_DB_URI"
+    )  # e.g., postgresql+psycopg://user:pass@host/db
     REDIS_URL = os.environ.get("REDIS_URL")
     CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL")
 

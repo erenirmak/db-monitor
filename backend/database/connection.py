@@ -59,7 +59,7 @@ def build_connection_string(db_type: str, fields: Dict[str, str]) -> Optional[st
 
         if db_type == "postgresql":
             port = fields.get("port", "5432")
-            return f"postgresql://{credentials}{host}:{port}/{database}"
+            return f"postgresql+psycopg://{credentials}{host}:{port}/{database}"
 
         if db_type == "mysql":
             port = fields.get("port", "3306")
@@ -153,6 +153,12 @@ def _create_engine_from_url(
     # Merge connect_args (timeout, sslmode, …)
     if connect_args:
         kwargs["connect_args"] = connect_args
+
+    # Ensure psycopg3 is used for PostgreSQL
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+    elif url.startswith("postgresql+psycopg2://"):
+        url = url.replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
 
     engine = create_engine(url, **kwargs)
 

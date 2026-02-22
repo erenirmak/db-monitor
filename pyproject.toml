@@ -3,15 +3,14 @@ name = "db-monitor"
 version = "0.1.0"
 description = "A comprehensive Flask application for monitoring and managing databases with SQL editor and real-time connection status"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "flask>=3.0.0",
     "flask-socketio>=5.3.0",
     "sqlalchemy>=2.0.0",
     "python-socketio>=5.9.0",
     "pymysql>=1.1.0",
-    "psycopg2-binary>=2.9.0",
-    "oracledb>=2.0.0",
+    "oracledb>=3.0.0",
     "pymssql>=2.3.0",
     "pyodbc>=5.1.0",
     "python-engineio>=4.7.0",
@@ -24,6 +23,7 @@ dependencies = [
     "opentelemetry-instrumentation-flask>=0.60b1",
     "opentelemetry-instrumentation-sqlalchemy>=0.60b1",
     "opentelemetry-exporter-otlp>=1.39.1",
+    "psycopg[binary,pool]>=3.3.3",
 ]
 
 [dependency-groups]

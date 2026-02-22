@@ -139,7 +139,7 @@ Connections are added via the **Add Connection** modal in the sidebar.
 
 | Engine | Driver / Scheme | Default Port | |
 |---|---|---|---|
-| PostgreSQL | `postgresql://` | 5432 | |
+| PostgreSQL | `postgresql+psycopg://` | 5432 | |
 | MySQL | `mysql+pymysql://` | 3306 | |
 | MS SQL Server | `mssql+pyodbc://` (ODBC Driver 17) | 1433 | *(experimental)* |
 | Oracle | `oracle+cx_oracle://` | 1521 | *(experimental)* |
@@ -279,7 +279,7 @@ All API routes require authentication. Unauthenticated requests receive a `401` 
 | Flask | Web framework |
 | SQLAlchemy | Data access |
 | cryptography | Encryption |
-| psycopg2-binary | PostgreSQL driver |
+| psycopg-binary | PostgreSQL driver |
 | PyMySQL | MySQL driver |
 | ldap3 | LDAP support |
 

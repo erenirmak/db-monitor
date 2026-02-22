@@ -37,7 +37,7 @@ class RoleManager:
             }
 
     @staticmethod
-    def create_role(name: str, description: str, permissions: List[str]) -> bool:
+    def create_role(name: str, description: str, permissions: List[str]) -> tuple[bool, str]:
         """Create a new custom role."""
         with get_conn() as conn:
             try:
@@ -45,9 +45,9 @@ class RoleManager:
                     "INSERT INTO roles (name, description, permissions, is_system) VALUES (?, ?, ?, 0)",
                     (name, description, json.dumps(permissions)),
                 )
-                return True
-            except Exception:
-                return False
+                return True, "Role created successfully"
+            except Exception as e:
+                return False, str(e)
 
     @staticmethod
     def update_role(name: str, description: str, permissions: List[str]) -> bool:
@@ -65,13 +65,15 @@ class RoleManager:
             return True
 
     @staticmethod
-    def delete_role(name: str) -> bool:
+    def delete_role(name: str) -> tuple[bool, str]:
         """Delete a custom role."""
         with get_conn() as conn:
             # Check if system role
             row = conn.execute("SELECT is_system FROM roles WHERE name = ?", (name,)).fetchone()
-            if not row or row[0]:
-                return False  # Cannot delete system roles
+            if not row:
+                return False, "Role not found"
+            if row[0]:
+                return False, "Cannot delete system roles"
 
             # Check if role is in use
             user_count = conn.execute("SELECT COUNT(*) FROM users WHERE role = ?", (name,)).fetchone()[0]
@@ -80,7 +82,7 @@ class RoleManager:
             ).fetchone()[0]
 
             if user_count > 0 or grant_count > 0:
-                return False  # Cannot delete role in use
+                return False, "Cannot delete role in use"
 
             conn.execute("DELETE FROM roles WHERE name = ?", (name,))
-            return True
+            return True, "Role deleted successfully"

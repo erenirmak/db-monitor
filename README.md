@@ -9,6 +9,10 @@ A self-hosted Flask web application for monitoring and managing multiple databas
 
 ---
 
+## Demo
+
+![Database Monitor Demo](images/demo.gif)
+
 ## Features
 
 **Multi-Database Support**

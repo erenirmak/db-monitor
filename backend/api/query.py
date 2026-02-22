@@ -53,7 +53,7 @@ def get_required_permissions_for_sql(sql: str) -> set:
 @login_required
 def execute_sql(db_key: str):
     user_id = session.get("user_id", "")
-    username = session.get("username", "")
+    username = session.get("username", user_id)
 
     if not user_owns_db(user_id, db_key):
         return jsonify({"error": "Database not found"}), 404
